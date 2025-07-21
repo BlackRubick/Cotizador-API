@@ -25,7 +25,7 @@ require('dotenv').config();
       password: 'password123',
       firstName: 'Administrador',
       lastName: 'Sistema',
-      phone: '+52 961 123 4567',
+      phone: '+529611234567',
       role: 'admin',
       position: 'Administrador del Sistema'
     });
@@ -37,7 +37,7 @@ require('dotenv').config();
       password: 'password123',
       firstName: 'Juan Carlos',
       lastName: 'González',
-      phone: '+52 961 234 5678',
+      phone: '+529612345678',
       role: 'user',
       position: 'Ejecutivo de Ventas'
     });
@@ -154,7 +154,7 @@ require('dotenv').config();
         name: 'Hospital General de Tuxtla',
         contact: 'Dr. Eduardo Ramírez',
         email: 'contacto@hospitalgeneral.com',
-        phone: '+52 961 234 5678',
+        phone: '+529612345678',
         street: 'Av. Central 123',
         city: 'Tuxtla Gutiérrez',
         state: 'Chiapas',

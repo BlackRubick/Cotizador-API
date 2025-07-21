@@ -83,18 +83,30 @@ const Category = sequelize.define('Category', {
   }
 }, {
   tableName: 'categories',
-  hooks: {
-    beforeSave: (category) => {
-      // Generate slug from name
-      if (category.changed('name')) {
-        category.slug = category.name
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .trim('-');
-      }
+hooks: {
+  beforeValidate: (category) => {
+    // Generate slug from name if not provided
+    if (!category.slug && category.name) {
+      category.slug = category.name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/^-+|-+$/g, '') // Remover guiones del inicio y final
+        .replace(/-+/g, '-'); // Remover múltiples guiones consecutivos
+    }
+  },
+  beforeUpdate: (category) => {
+    // Regenerate slug if name changed
+    if (category.changed('name')) {
+      category.slug = category.name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
     }
   }
+}
 });
 
 // Self-referencing association for parent-child relationship

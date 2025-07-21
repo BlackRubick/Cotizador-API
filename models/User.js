@@ -52,7 +52,7 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(20),
     allowNull: false,
     validate: {
-      is: /^\+?[1-9]\d{1,14}$/
+      is: /^\+?[\d\s\-\(\)]{7,20}$/
     }
   },
   role: {

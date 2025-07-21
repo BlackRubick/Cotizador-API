@@ -1,6 +1,7 @@
-const Category = require('../models/Category');
-const Product = require('../models/Product');
+// controllers/categoryController.js
+const { Category, Product, User } = require('../models');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
 
 // @desc    Get all categories
 // @route   GET /api/categories
@@ -9,20 +10,31 @@ const getCategories = async (req, res) => {
   try {
     const { active = true, includeProducts = false } = req.query;
     
-    let query = {};
+    let whereClause = {};
     if (active !== 'all') {
-      query.isActive = active === 'true';
+      whereClause.isActive = active === 'true';
     }
 
-    let categoriesQuery = Category.find(query)
-      .populate('createdBy', 'firstName lastName username')
-      .sort({ sortOrder: 1, name: 1 });
+    let includeOptions = [
+      {
+        model: User,
+        as: 'creator',
+        attributes: ['firstName', 'lastName', 'username']
+      }
+    ];
 
     if (includeProducts === 'true') {
-      categoriesQuery = categoriesQuery.populate('subcategories');
+      includeOptions.push({
+        model: Category,
+        as: 'subcategories'
+      });
     }
 
-    const categories = await categoriesQuery;
+    const categories = await Category.findAll({
+      where: whereClause,
+      include: includeOptions,
+      order: [['sortOrder', 'ASC'], ['name', 'ASC']]
+    });
 
     res.json({
       success: true,
@@ -43,10 +55,24 @@ const getCategories = async (req, res) => {
 // @access  Private
 const getCategory = async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id)
-      .populate('createdBy', 'firstName lastName username')
-      .populate('parentCategory', 'name')
-      .populate('subcategories');
+    const category = await Category.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        },
+        {
+          model: Category,
+          as: 'parentCategory',
+          attributes: ['name']
+        },
+        {
+          model: Category,
+          as: 'subcategories'
+        }
+      ]
+    });
 
     if (!category) {
       return res.status(404).json({
@@ -56,27 +82,24 @@ const getCategory = async (req, res) => {
     }
 
     // Get products in this category
-    const products = await Product.find({ 
-      category: req.params.id, 
-      status: 'active' 
-    }).select('name code basePrice');
+    const products = await Product.findAll({ 
+      where: { 
+        categoryId: req.params.id,
+        status: 'active' 
+      },
+      attributes: ['name', 'code', 'basePrice']
+    });
 
     res.json({
       success: true,
       data: {
-        ...category.toObject(),
+        ...category.toJSON(),
         products
       }
     });
 
   } catch (error) {
     console.error('Get category error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Category not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -99,7 +122,11 @@ const createCategory = async (req, res) => {
 
     // Check if category name already exists
     const existingCategory = await Category.findOne({ 
-      name: { $regex: new RegExp('^' + req.body.name + '$', 'i') }
+      where: {
+        name: {
+          [Op.iLike]: req.body.name
+        }
+      }
     });
 
     if (existingCategory) {
@@ -110,8 +137,8 @@ const createCategory = async (req, res) => {
     }
 
     // Validate parent category if provided
-    if (req.body.parentCategory) {
-      const parentCategory = await Category.findById(req.body.parentCategory);
+    if (req.body.parentCategoryId) {
+      const parentCategory = await Category.findByPk(req.body.parentCategoryId);
       if (!parentCategory) {
         return res.status(404).json({
           success: false,
@@ -125,15 +152,23 @@ const createCategory = async (req, res) => {
       createdBy: req.user.id
     };
 
-    const category = new Category(categoryData);
-    await category.save();
+    const category = await Category.create(categoryData);
 
-    await category.populate('createdBy', 'firstName lastName username');
+    // Load the created category with associations
+    const createdCategory = await Category.findByPk(category.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
+    });
 
     res.status(201).json({
       success: true,
       message: 'Category created successfully',
-      data: category
+      data: createdCategory
     });
 
   } catch (error) {
@@ -158,7 +193,7 @@ const updateCategory = async (req, res) => {
       });
     }
 
-    let category = await Category.findById(req.params.id);
+    let category = await Category.findByPk(req.params.id);
 
     if (!category) {
       return res.status(404).json({
@@ -170,8 +205,10 @@ const updateCategory = async (req, res) => {
     // Check for duplicate name (excluding current category)
     if (req.body.name) {
       const existingCategory = await Category.findOne({
-        _id: { $ne: req.params.id },
-        name: { $regex: new RegExp('^' + req.body.name + '$', 'i') }
+        where: {
+          id: { [Op.ne]: req.params.id },
+          name: { [Op.iLike]: req.body.name }
+        }
       });
 
       if (existingCategory) {
@@ -183,8 +220,8 @@ const updateCategory = async (req, res) => {
     }
 
     // Validate parent category if provided
-    if (req.body.parentCategory) {
-      const parentCategory = await Category.findById(req.body.parentCategory);
+    if (req.body.parentCategoryId) {
+      const parentCategory = await Category.findByPk(req.body.parentCategoryId);
       if (!parentCategory) {
         return res.status(404).json({
           success: false,
@@ -193,7 +230,7 @@ const updateCategory = async (req, res) => {
       }
 
       // Prevent circular reference
-      if (req.body.parentCategory === req.params.id) {
+      if (req.body.parentCategoryId == req.params.id) {
         return res.status(400).json({
           success: false,
           message: 'Category cannot be its own parent'
@@ -201,30 +238,32 @@ const updateCategory = async (req, res) => {
       }
     }
 
-    category = await Category.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true
-      }
-    ).populate('createdBy', 'firstName lastName username')
-     .populate('parentCategory', 'name');
+    await category.update(req.body);
+
+    // Reload with associations
+    const updatedCategory = await Category.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        },
+        {
+          model: Category,
+          as: 'parentCategory',
+          attributes: ['name']
+        }
+      ]
+    });
 
     res.json({
       success: true,
       message: 'Category updated successfully',
-      data: category
+      data: updatedCategory
     });
 
   } catch (error) {
     console.error('Update category error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Category not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -237,7 +276,7 @@ const updateCategory = async (req, res) => {
 // @access  Private
 const deleteCategory = async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id);
+    const category = await Category.findByPk(req.params.id);
 
     if (!category) {
       return res.status(404).json({
@@ -247,7 +286,10 @@ const deleteCategory = async (req, res) => {
     }
 
     // Check if category has products
-    const productCount = await Product.countDocuments({ category: req.params.id });
+    const productCount = await Product.count({ 
+      where: { categoryId: req.params.id } 
+    });
+    
     if (productCount > 0) {
       return res.status(400).json({
         success: false,
@@ -256,7 +298,10 @@ const deleteCategory = async (req, res) => {
     }
 
     // Check if category has subcategories
-    const subcategoryCount = await Category.countDocuments({ parentCategory: req.params.id });
+    const subcategoryCount = await Category.count({ 
+      where: { parentCategoryId: req.params.id } 
+    });
+    
     if (subcategoryCount > 0) {
       return res.status(400).json({
         success: false,
@@ -264,7 +309,7 @@ const deleteCategory = async (req, res) => {
       });
     }
 
-    await Category.findByIdAndDelete(req.params.id);
+    await category.destroy();
 
     res.json({
       success: true,
@@ -273,12 +318,6 @@ const deleteCategory = async (req, res) => {
 
   } catch (error) {
     console.error('Delete category error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Category not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: 'Server error'

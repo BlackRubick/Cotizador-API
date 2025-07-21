@@ -1,3 +1,4 @@
+// routes/categories.js
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
@@ -24,9 +25,9 @@ const categoryValidation = [
     .withMessage('Description is required')
     .isLength({ max: 300 })
     .withMessage('Description cannot exceed 300 characters'),
-  body('parentCategory')
+  body('parentCategoryId')
     .optional()
-    .isMongoId()
+    .isInt()
     .withMessage('Invalid parent category ID')
 ];
 

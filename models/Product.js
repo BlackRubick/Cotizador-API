@@ -1,3 +1,4 @@
+// models/Product.js - Simplificado con solo tus campos específicos
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -15,173 +16,6 @@ const Product = sequelize.define('Product', {
       notEmpty: { msg: 'Product code is required' }
     }
   },
-  name: {
-    type: DataTypes.STRING(200),
-    allowNull: false,
-    validate: {
-      notEmpty: { msg: 'Product name is required' },
-      len: {
-        args: [1, 200],
-        msg: 'Name cannot exceed 200 characters'
-      }
-    }
-  },
-  description: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-    validate: {
-      notEmpty: { msg: 'Description is required' },
-      len: {
-        args: [1, 500],
-        msg: 'Description cannot exceed 500 characters'
-      }
-    }
-  },
-  categoryId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: 'categories',
-      key: 'id'
-    },
-    validate: {
-      notEmpty: { msg: 'Category is required' }
-    }
-  },
-  categoryName: {
-    type: DataTypes.STRING(100),
-    allowNull: false,
-    validate: {
-      notEmpty: { msg: 'Category name is required' }
-    }
-  },
-  brand: {
-    type: DataTypes.STRING(100),
-    allowNull: false,
-    validate: {
-      notEmpty: { msg: 'Brand is required' },
-      len: {
-        args: [1, 100],
-        msg: 'Brand cannot exceed 100 characters'
-      }
-    }
-  },
-  basePrice: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-    validate: {
-      notEmpty: { msg: 'Base price is required' },
-      min: {
-        args: [0],
-        msg: 'Price cannot be negative'
-      }
-    }
-  },
-  currency: {
-    type: DataTypes.ENUM('MXN', 'USD', 'EUR'),
-    defaultValue: 'MXN'
-  },
-  compatibility: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: [],
-    validate: {
-      isValidCompatibility(value) {
-        if (value && Array.isArray(value)) {
-          const validOptions = ['ADULTO', 'PEDIÁTRICO', 'NEONATAL', 'HOSPITAL', 'CLÍNICA', 'AMBULANCIA', 'LABORATORIO'];
-          const invalid = value.filter(item => !validOptions.includes(item));
-          if (invalid.length > 0) {
-            throw new Error(`Invalid compatibility options: ${invalid.join(', ')}`);
-          }
-        }
-      }
-    }
-  },
-  specifications: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: {}
-  },
-  images: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: [],
-    comment: 'Array of image objects with filename, originalName, path, url, size, mimetype'
-  },
-  accessories: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: [],
-    comment: 'Array of accessory objects with name, code, price, included'
-  },
-  stockQuantity: {
-    type: DataTypes.INTEGER,
-    defaultValue: 0,
-    validate: {
-      min: {
-        args: [0],
-        msg: 'Stock quantity cannot be negative'
-      }
-    }
-  },
-  stockMinStock: {
-    type: DataTypes.INTEGER,
-    defaultValue: 5,
-    validate: {
-      min: {
-        args: [0],
-        msg: 'Min stock cannot be negative'
-      }
-    }
-  },
-  stockLocation: {
-    type: DataTypes.STRING(100),
-    allowNull: true
-  },
-  status: {
-    type: DataTypes.ENUM('active', 'inactive', 'discontinued'),
-    defaultValue: 'active'
-  },
-  tags: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: [],
-    comment: 'Array of string tags'
-  },
-  supplierName: {
-    type: DataTypes.STRING(100),
-    allowNull: true
-  },
-  supplierContact: {
-    type: DataTypes.STRING(100),
-    allowNull: true
-  },
-  supplierEmail: {
-    type: DataTypes.STRING(100),
-    allowNull: true,
-    validate: {
-      isEmail: {
-        msg: 'Please enter a valid supplier email'
-      }
-    }
-  },
-  supplierPhone: {
-    type: DataTypes.STRING(20),
-    allowNull: true
-  },
-  warrantyDuration: {
-    type: DataTypes.INTEGER,
-    defaultValue: 12,
-    comment: 'Warranty duration in months'
-  },
-  warrantyType: {
-    type: DataTypes.STRING(50),
-    defaultValue: 'manufacturer'
-  },
-  warrantyDescription: {
-    type: DataTypes.TEXT,
-    allowNull: true
-  },
   createdBy: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -190,53 +24,224 @@ const Product = sequelize.define('Product', {
       key: 'id'
     }
   },
-  lastUpdatedBy: {
-    type: DataTypes.INTEGER,
+  
+  // ========== TUS CAMPOS ESPECÍFICOS DE NEGOCIO ==========
+  
+  servicio: {
+    type: DataTypes.STRING(100),
     allowNull: true,
-    references: {
-      model: 'users',
-      key: 'id'
-    }
+    comment: 'Tipo de servicio al que pertenece el producto'
   },
-  salesCount: {
+  especialidad: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Especialidad médica a la que está dirigido'
+  },
+  clasificacion: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Clasificación del producto'
+  },
+  paraDescripcion: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'para_descripcion',
+    comment: 'Descripción de para qué sirve el producto'
+  },
+  item: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    comment: 'Descripción específica del item'
+  },
+  cantidadPaquete: {
     type: DataTypes.INTEGER,
-    defaultValue: 0,
+    defaultValue: 1,
+    field: 'cantidad_paquete',
+    validate: {
+      min: {
+        args: [1],
+        msg: 'Cantidad por paquete debe ser al menos 1'
+      }
+    },
+    comment: 'Cantidad de unidades por paquete'
+  },
+  moneda: {
+    type: DataTypes.ENUM('MXN', 'USD', 'EUR'),
+    defaultValue: 'MXN',
+    comment: 'Moneda del producto'
+  },
+  costo: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
     validate: {
       min: {
         args: [0],
-        msg: 'Sales count cannot be negative'
+        msg: 'Costo no puede ser negativo'
       }
-    }
+    },
+    comment: 'Costo total del producto'
   },
-  lastSaleDate: {
-    type: DataTypes.DATE,
-    allowNull: true
+  costoUnitario: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'costo_unitario',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Costo unitario no puede ser negativo'
+      }
+    },
+    comment: 'Costo por unidad individual'
+  },
+  caducidad: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'Fecha de caducidad del producto'
+  },
+  almacen: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Ubicación en almacén'
+  },
+  proveedor: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    comment: 'Nombre del proveedor principal'
+  },
+  uso: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    comment: 'Descripción del uso del producto'
+  },
+  almacenEn: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    field: 'almacen_en',
+    comment: 'Condiciones de almacenamiento'
+  },
+  incluye: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Qué incluye el producto o paquete'
+  },
+  impuestos: {
+    type: DataTypes.DECIMAL(5, 2),
+    defaultValue: 16.00,
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Impuestos no pueden ser negativos'
+      },
+      max: {
+        args: [100],
+        msg: 'Impuestos no pueden exceder 100%'
+      }
+    },
+    comment: 'Porcentaje de impuestos (IVA, etc.)'
+  },
+  factoryPrice: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'factory_price',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Precio de fábrica no puede ser negativo'
+      }
+    },
+    comment: 'Precio de fábrica original'
+  },
+  landedFactor: {
+    type: DataTypes.DECIMAL(10, 4),
+    defaultValue: 1.0000,
+    field: 'landed_factor',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Factor landed no puede ser negativo'
+      }
+    },
+    comment: 'Factor para calcular precio landed (incluyendo shipping, etc.)'
+  },
+  marginFactor: {
+    type: DataTypes.DECIMAL(10, 4),
+    defaultValue: 1.0000,
+    field: 'margin_factor',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Factor de margen no puede ser negativo'
+      }
+    },
+    comment: 'Factor de margen de ganancia'
+  },
+  valorMoneda: {
+    type: DataTypes.DECIMAL(10, 4),
+    defaultValue: 1.0000,
+    field: 'valor_moneda',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Valor de moneda no puede ser negativo'
+      }
+    },
+    comment: 'Factor de conversión de moneda'
+  },
+  comisionVenta: {
+    type: DataTypes.DECIMAL(5, 2),
+    defaultValue: 0.00,
+    field: 'comision_venta',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Comisión no puede ser negativa'
+      },
+      max: {
+        args: [100],
+        msg: 'Comisión no puede exceder 100%'
+      }
+    },
+    comment: 'Porcentaje de comisión de venta'
+  },
+  precioVentaPaquete: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'precio_venta_paquete',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Precio de venta por paquete no puede ser negativo'
+      }
+    },
+    comment: 'Precio de venta por paquete completo'
+  },
+  precioUnitario: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'precio_unitario',
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Precio unitario no puede ser negativo'
+      }
+    },
+    comment: 'Precio de venta por unidad individual'
   }
 }, {
   tableName: 'products',
   timestamps: true,
+  paranoid: true, // Para soft deletes
   indexes: [
-    {
-      fields: ['code']
-    },
-    {
-      fields: ['name']
-    },
-    {
-      fields: ['categoryId']
-    },
-    {
-      fields: ['brand']
-    },
-    {
-      fields: ['status']
-    },
-    {
-      fields: ['basePrice']
-    },
-    {
-      fields: ['createdAt']
-    }
+    { fields: ['code'] },
+    { fields: ['servicio'] },
+    { fields: ['especialidad'] },
+    { fields: ['clasificacion'] },
+    { fields: ['item'] },
+    { fields: ['proveedor'] },
+    { fields: ['almacen'] },
+    { fields: ['factoryPrice'] },
+    { fields: ['precioVentaPaquete'] },
+    { fields: ['createdAt'] }
   ],
   hooks: {
     beforeSave: (product) => {
@@ -245,12 +250,14 @@ const Product = sequelize.define('Product', {
         product.code = product.code.toString().toUpperCase().trim();
       }
       
-      // Trim name and brand
-      if (product.name) {
-        product.name = product.name.toString().trim();
+      // Calcular precio unitario si no está definido
+      if (product.precioVentaPaquete && product.cantidadPaquete && !product.precioUnitario) {
+        product.precioUnitario = product.precioVentaPaquete / product.cantidadPaquete;
       }
-      if (product.brand) {
-        product.brand = product.brand.toString().trim();
+      
+      // Calcular costo unitario si no está definido
+      if (product.costo && product.cantidadPaquete && !product.costoUnitario) {
+        product.costoUnitario = product.costo / product.cantidadPaquete;
       }
     }
   }
@@ -258,57 +265,98 @@ const Product = sequelize.define('Product', {
 
 // Instance methods
 Product.prototype.getFormattedPrice = function() {
+  const price = this.precioVentaPaquete || 0;
   return new Intl.NumberFormat('es-MX', {
     style: 'currency',
-    currency: this.currency || 'MXN'
-  }).format(this.basePrice);
+    currency: this.moneda || 'MXN'
+  }).format(price);
 };
 
-Product.prototype.isInStock = function() {
-  return this.stockQuantity > 0;
+Product.prototype.getFormattedUnitPrice = function() {
+  const price = this.precioUnitario || (this.precioVentaPaquete / (this.cantidadPaquete || 1));
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: this.moneda || 'MXN'
+  }).format(price);
 };
 
-Product.prototype.isLowStock = function() {
-  return this.stockQuantity <= this.stockMinStock;
+Product.prototype.isExpired = function() {
+  if (!this.caducidad) return false;
+  return new Date(this.caducidad) < new Date();
 };
 
-// Virtual getter for formatted price (similar to Mongoose virtual)
-Product.prototype.getVirtualFormattedPrice = function() {
-  return this.getFormattedPrice();
+Product.prototype.isNearExpiry = function(days = 30) {
+  if (!this.caducidad) return false;
+  const expiryDate = new Date(this.caducidad);
+  const warningDate = new Date();
+  warningDate.setDate(warningDate.getDate() + days);
+  return expiryDate <= warningDate;
 };
 
-// Static method to find products by compatibility
-Product.findByCompatibility = function(compatibility) {
-  return this.findAll({
-    where: sequelize.where(
-      sequelize.fn('JSON_CONTAINS', sequelize.col('compatibility'), JSON.stringify(compatibility)),
-      true
-    )
-  });
+// Calcular precio final con todos los factores
+Product.prototype.calculateFinalPrice = function() {
+  if (!this.factoryPrice) return this.precioVentaPaquete || 0;
+  
+  let price = this.factoryPrice;
+  price *= this.landedFactor || 1;
+  price *= this.marginFactor || 1;
+  price *= this.valorMoneda || 1;
+  
+  // Agregar comisión
+  if (this.comisionVenta) {
+    price *= (1 + (this.comisionVenta / 100));
+  }
+  
+  return price;
 };
 
-// Static method for text search (similar to MongoDB text index)
+// Static method for text search
 Product.searchByText = function(searchTerm) {
   const { Op } = require('sequelize');
   return this.findAll({
     where: {
       [Op.or]: [
-        { name: { [Op.like]: `%${searchTerm}%` } },
-        { description: { [Op.like]: `%${searchTerm}%` } },
-        { brand: { [Op.like]: `%${searchTerm}%` } },
-        { code: { [Op.like]: `%${searchTerm}%` } }
+        { code: { [Op.like]: `%${searchTerm}%` } },
+        { item: { [Op.like]: `%${searchTerm}%` } },
+        { servicio: { [Op.like]: `%${searchTerm}%` } },
+        { especialidad: { [Op.like]: `%${searchTerm}%` } },
+        { clasificacion: { [Op.like]: `%${searchTerm}%` } },
+        { paraDescripcion: { [Op.like]: `%${searchTerm}%` } },
+        { proveedor: { [Op.like]: `%${searchTerm}%` } }
       ]
     }
   });
 };
 
-// Remove sensitive data from JSON output
+// Remove sensitive data from JSON output and add calculated fields
 Product.prototype.toJSON = function() {
   const product = { ...this.get() };
   delete product.deletedAt;
   
-  // Add virtual formatted price
+  // Add virtual fields for frontend compatibility
+  product.name = product.item || product.code;
+  product.description = product.paraDescripcion || product.uso || '';
+  product.brand = product.proveedor || 'N/A';
+  product.basePrice = product.precioVentaPaquete || product.precioUnitario || 0;
+  product.category = product.servicio || 'General';
+  product.categoryName = product.especialidad || product.servicio || 'General';
+  product.compatibility = [product.clasificacion].filter(Boolean);
+  
+  // Add calculated fields
   product.formattedPrice = this.getFormattedPrice();
+  product.formattedUnitPrice = this.getFormattedUnitPrice();
+  product.finalPrice = this.calculateFinalPrice();
+  product.isExpired = this.isExpired();
+  product.isNearExpiry = this.isNearExpiry();
+  
+  // Stock info (dummy for now)
+  product.stock = {
+    quantity: 100, // Podrías agregar este campo si lo necesitas
+    minStock: 10,
+    location: product.almacen,
+    isInStock: true,
+    isLowStock: false
+  };
   
   return product;
 };

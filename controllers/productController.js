@@ -1,6 +1,7 @@
-const Product = require('../models/Product');
-const Category = require('../models/Category');
+// controllers/productController.js - Simplificado para tus campos específicos
+const { Product, User } = require('../models');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
 
 // @desc    Get all products
 // @route   GET /api/products
@@ -11,56 +12,81 @@ const getProducts = async (req, res) => {
       page = 1, 
       limit = 10, 
       search, 
-      category, 
-      brand, 
-      status,
-      compatibility,
+      servicio,
+      especialidad,
+      clasificacion,
+      proveedor,
+      almacen,
       minPrice,
       maxPrice,
-      sort = '-createdAt'
+      sort = 'createdAt'
     } = req.query;
     
-    // Build query
-    let query = {};
+    // Build where clause
+    let whereClause = {};
     
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { code: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+      whereClause[Op.or] = [
+        { code: { [Op.iLike]: `%${search}%` } },
+        { item: { [Op.iLike]: `%${search}%` } },
+        { servicio: { [Op.iLike]: `%${search}%` } },
+        { especialidad: { [Op.iLike]: `%${search}%` } },
+        { clasificacion: { [Op.iLike]: `%${search}%` } },
+        { paraDescripcion: { [Op.iLike]: `%${search}%` } },
+        { proveedor: { [Op.iLike]: `%${search}%` } }
       ];
     }
     
-    if (category) {
-      query.category = category;
+    if (servicio) {
+      whereClause.servicio = { [Op.iLike]: `%${servicio}%` };
     }
     
-    if (brand) {
-      query.brand = { $regex: brand, $options: 'i' };
+    if (especialidad) {
+      whereClause.especialidad = { [Op.iLike]: `%${especialidad}%` };
     }
     
-    if (status) {
-      query.status = status;
+    if (clasificacion) {
+      whereClause.clasificacion = { [Op.iLike]: `%${clasificacion}%` };
     }
     
-    if (compatibility) {
-      query.compatibility = { $in: compatibility.split(',') };
+    if (proveedor) {
+      whereClause.proveedor = { [Op.iLike]: `%${proveedor}%` };
+    }
+    
+    if (almacen) {
+      whereClause.almacen = { [Op.iLike]: `%${almacen}%` };
     }
     
     if (minPrice || maxPrice) {
-      query.basePrice = {};
-      if (minPrice) query.basePrice.$gte = parseFloat(minPrice);
-      if (maxPrice) query.basePrice.$lte = parseFloat(maxPrice);
+      whereClause.precioVentaPaquete = {};
+      if (minPrice) whereClause.precioVentaPaquete[Op.gte] = parseFloat(minPrice);
+      if (maxPrice) whereClause.precioVentaPaquete[Op.lte] = parseFloat(maxPrice);
     }
 
-    const products = await Product.find(query)
-      .populate('category', 'name')
-      .populate('createdBy', 'firstName lastName username')
-      .sort(sort)
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+    // Calculate offset
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    const total = await Product.countDocuments(query);
+    // Build order clause
+    let orderClause = [];
+    if (sort) {
+      const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+      const sortDirection = sort.startsWith('-') ? 'DESC' : 'ASC';
+      orderClause.push([sortField, sortDirection]);
+    }
+
+    const { count, rows: products } = await Product.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ],
+      order: orderClause,
+      limit: parseInt(limit),
+      offset: offset
+    });
 
     res.json({
       success: true,
@@ -68,8 +94,8 @@ const getProducts = async (req, res) => {
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+        total: count,
+        pages: Math.ceil(count / parseInt(limit))
       }
     });
 
@@ -87,10 +113,15 @@ const getProducts = async (req, res) => {
 // @access  Private
 const getProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-      .populate('category', 'name description')
-      .populate('createdBy', 'firstName lastName username')
-      .populate('lastUpdatedBy', 'firstName lastName username');
+    const product = await Product.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
+    });
 
     if (!product) {
       return res.status(404).json({
@@ -106,12 +137,6 @@ const getProduct = async (req, res) => {
 
   } catch (error) {
     console.error('Get product error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -133,20 +158,14 @@ const createProduct = async (req, res) => {
     }
 
     // Check if product code already exists
-    const existingProduct = await Product.findOne({ code: req.body.code.toUpperCase() });
+    const existingProduct = await Product.findOne({ 
+      where: { code: req.body.code.toUpperCase() } 
+    });
+    
     if (existingProduct) {
       return res.status(400).json({
         success: false,
         message: 'Product with this code already exists'
-      });
-    }
-
-    // Verify category exists
-    const category = await Category.findById(req.body.category);
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: 'Category not found'
       });
     }
 
@@ -156,21 +175,23 @@ const createProduct = async (req, res) => {
       code: req.body.code.toUpperCase()
     };
 
-    const product = new Product(productData);
-    await product.save();
+    const product = await Product.create(productData);
 
-    // Update category product count
-    await Category.findByIdAndUpdate(req.body.category, {
-      $inc: { productCount: 1 }
+    // Load created product with associations
+    const createdProduct = await Product.findByPk(product.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
     });
-
-    await product.populate('category', 'name');
-    await product.populate('createdBy', 'firstName lastName username');
 
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
-      data: product
+      data: createdProduct
     });
 
   } catch (error) {
@@ -195,7 +216,7 @@ const updateProduct = async (req, res) => {
       });
     }
 
-    let product = await Product.findById(req.params.id);
+    let product = await Product.findByPk(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -207,8 +228,10 @@ const updateProduct = async (req, res) => {
     // Check for duplicate code (excluding current product)
     if (req.body.code) {
       const existingProduct = await Product.findOne({
-        _id: { $ne: req.params.id },
-        code: req.body.code.toUpperCase()
+        where: {
+          id: { [Op.ne]: req.params.id },
+          code: req.body.code.toUpperCase()
+        }
       });
 
       if (existingProduct) {
@@ -220,40 +243,32 @@ const updateProduct = async (req, res) => {
     }
 
     // Update product
-    const updateData = {
-      ...req.body,
-      lastUpdatedBy: req.user.id
-    };
-
+    const updateData = { ...req.body };
     if (req.body.code) {
       updateData.code = req.body.code.toUpperCase();
     }
 
-    product = await Product.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      {
-        new: true,
-        runValidators: true
-      }
-    ).populate('category', 'name')
-     .populate('createdBy', 'firstName lastName username')
-     .populate('lastUpdatedBy', 'firstName lastName username');
+    await product.update(updateData);
+
+    // Reload with associations
+    const updatedProduct = await Product.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
+    });
 
     res.json({
       success: true,
       message: 'Product updated successfully',
-      data: product
+      data: updatedProduct
     });
 
   } catch (error) {
     console.error('Update product error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -266,7 +281,7 @@ const updateProduct = async (req, res) => {
 // @access  Private
 const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findByPk(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -275,25 +290,7 @@ const deleteProduct = async (req, res) => {
       });
     }
 
-    // Check if product is used in any quotes
-    const Quote = require('../models/Quote');
-    const quotesUsingProduct = await Quote.countDocuments({
-      'products.productId': req.params.id
-    });
-
-    if (quotesUsingProduct > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete product. It is used in existing quotes.'
-      });
-    }
-
-    await Product.findByIdAndDelete(req.params.id);
-
-    // Update category product count
-    await Category.findByIdAndUpdate(product.category, {
-      $inc: { productCount: -1 }
-    });
+    await product.destroy();
 
     res.json({
       success: true,
@@ -302,12 +299,6 @@ const deleteProduct = async (req, res) => {
 
   } catch (error) {
     console.error('Delete product error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -320,32 +311,56 @@ const deleteProduct = async (req, res) => {
 // @access  Private
 const getProductStats = async (req, res) => {
   try {
-    const totalProducts = await Product.countDocuments();
-    const activeProducts = await Product.countDocuments({ status: 'active' });
-    const lowStockProducts = await Product.countDocuments({
-      $expr: { $lte: ['$stock.quantity', '$stock.minStock'] }
-    });
+    const totalProducts = await Product.count();
     
-    const categoryStats = await Product.aggregate([
-      { $group: { _id: '$categoryName', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]);
+    // Servicios stats
+    const servicioStats = await Product.findAll({
+      attributes: [
+        'servicio',
+        [Product.sequelize.fn('COUNT', Product.sequelize.col('id')), 'count']
+      ],
+      where: {
+        servicio: { [Op.not]: null }
+      },
+      group: ['servicio'],
+      order: [[Product.sequelize.fn('COUNT', Product.sequelize.col('id')), 'DESC']]
+    });
 
-    const brandStats = await Product.aggregate([
-      { $group: { _id: '$brand', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 10 }
-    ]);
+    // Especialidad stats
+    const especialidadStats = await Product.findAll({
+      attributes: [
+        'especialidad',
+        [Product.sequelize.fn('COUNT', Product.sequelize.col('id')), 'count']
+      ],
+      where: {
+        especialidad: { [Op.not]: null }
+      },
+      group: ['especialidad'],
+      order: [[Product.sequelize.fn('COUNT', Product.sequelize.col('id')), 'DESC']],
+      limit: 10
+    });
+
+    // Proveedores stats
+    const proveedorStats = await Product.findAll({
+      attributes: [
+        'proveedor',
+        [Product.sequelize.fn('COUNT', Product.sequelize.col('id')), 'count']
+      ],
+      where: {
+        proveedor: { [Op.not]: null }
+      },
+      group: ['proveedor'],
+      order: [[Product.sequelize.fn('COUNT', Product.sequelize.col('id')), 'DESC']],
+      limit: 10
+    });
 
     res.json({
       success: true,
       data: {
         totalProducts,
-        activeProducts,
-        inactiveProducts: totalProducts - activeProducts,
-        lowStockProducts,
-        categoryStats,
-        brandStats
+        servicioStats,
+        especialidadStats,
+        proveedorStats
       }
     });
 

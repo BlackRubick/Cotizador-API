@@ -82,7 +82,7 @@ const Client = sequelize.define('Client', {
   },
   createdBy: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true, // ← CAMBIO PRINCIPAL: de false a true
     references: {
       model: 'users',
       key: 'id'

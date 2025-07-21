@@ -1,286 +1,349 @@
-const Client = require('../models/Client');
-const { validationResult } = require('express-validator');
+// controllers/clientController.js
+const { Client } = require('../models');
+const { Op } = require('sequelize');
 
-// @desc    Get all clients
-// @route   GET /api/clients
-// @access  Private
+// Obtener todos los clientes
 const getClients = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, type, status } = req.query;
+    const { page = 1, limit = 10, search, clientType, status } = req.query;
     
-    // Build query
-    let query = {};
+    // Construir filtros
+    const where = {};
     
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { contact: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+      where[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { contact: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } }
       ];
     }
     
-    if (type) {
-      query.clientType = type;
+    if (clientType) {
+      where.clientType = clientType;
     }
     
     if (status) {
-      query.status = status;
+      where.status = status;
     }
 
-    const options = {
-      page: parseInt(page),
+    // Calcular offset para paginación manual
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Obtener clientes con paginación manual
+    const { count, rows } = await Client.findAndCountAll({
+      where,
       limit: parseInt(limit),
-      sort: { createdAt: -1 },
-      populate: {
-        path: 'createdBy',
-        select: 'firstName lastName username'
-      }
-    };
-
-    const clients = await Client.paginate(query, options);
-
-    res.json({
-      success: true,
-      data: clients.docs,
-      pagination: {
-        page: clients.page,
-        limit: clients.limit,
-        totalPages: clients.totalPages,
-        totalDocs: clients.totalDocs,
-        hasNextPage: clients.hasNextPage,
-        hasPrevPage: clients.hasPrevPage
-      }
+      offset: offset,
+      order: [['createdAt', 'DESC']],
+      attributes: { exclude: ['deletedAt'] }
     });
 
+    // Calcular información de paginación
+    const totalPages = Math.ceil(count / parseInt(limit));
+    const hasNextPage = parseInt(page) < totalPages;
+    const hasPrevPage = parseInt(page) > 1;
+
+    res.status(200).json({
+      success: true,
+      data: rows,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalItems: count,
+        itemsPerPage: parseInt(limit),
+        hasNextPage,
+        hasPrevPage
+      }
+    });
   } catch (error) {
     console.error('Get clients error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error al obtener clientes',
+      error: error.message
     });
   }
 };
 
-// @desc    Get single client
-// @route   GET /api/clients/:id
-// @access  Private
+// Obtener un cliente por ID
 const getClient = async (req, res) => {
   try {
-    const client = await Client.findById(req.params.id)
-      .populate('createdBy', 'firstName lastName username');
-
+    const { id } = req.params;
+    
+    const client = await Client.findByPk(id, {
+      attributes: { exclude: ['deletedAt'] }
+    });
+    
     if (!client) {
       return res.status(404).json({
         success: false,
-        message: 'Client not found'
+        message: 'Cliente no encontrado'
       });
     }
-
-    res.json({
+    
+    res.status(200).json({
       success: true,
       data: client
     });
-
   } catch (error) {
     console.error('Get client error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Client not found'
-      });
-    }
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error al obtener cliente',
+      error: error.message
     });
   }
 };
 
-// @desc    Create client
-// @route   POST /api/clients
-// @access  Private
+// Crear nuevo cliente
 const createClient = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    const {
+      name,
+      contact,
+      email,
+      phone,
+      street,
+      city,
+      state,
+      zipCode,
+      country,
+      rfc,
+      clientType,
+      notes
+    } = req.body;
+
+    // Validaciones básicas
+    if (!name || !contact || !email || !phone) {
       return res.status(400).json({
         success: false,
-        errors: errors.array()
+        message: 'Los campos nombre, contacto, email y teléfono son requeridos'
       });
     }
 
-    const clientData = {
-      ...req.body,
-      createdBy: req.user.id
-    };
-
-    // Check if client already exists
+    // Verificar si ya existe un cliente con el mismo email
     const existingClient = await Client.findOne({
-      $or: [
-        { email: req.body.email },
-        { name: req.body.name }
-      ]
+      where: { email: email.toLowerCase() }
     });
 
     if (existingClient) {
       return res.status(400).json({
         success: false,
-        message: 'Client already exists with this name or email'
+        message: 'Ya existe un cliente con este email'
       });
     }
 
-    const client = new Client(clientData);
-    await client.save();
+    // Crear dirección completa
+    const fullAddress = [street, city, state, zipCode, country]
+      .filter(Boolean)
+      .join(', ');
 
-    await client.populate('createdBy', 'firstName lastName username');
+    // Crear cliente - IMPORTANTE: incluir createdBy del usuario autenticado
+    const client = await Client.create({
+      name,
+      contact,
+      email: email.toLowerCase(),
+      phone,
+      street,
+      city,
+      state,
+      zipCode,
+      country,
+      fullAddress,
+      rfc,
+      clientType: clientType || 'Hospital',
+      notes,
+      status: 'active',
+      createdBy: req.user.id // ESTO ES LO QUE FALTABA - ID del usuario autenticado
+    });
 
     res.status(201).json({
       success: true,
-      message: 'Client created successfully',
-      data: client
+      data: client,
+      message: 'Cliente creado exitosamente'
     });
-
   } catch (error) {
     console.error('Create client error:', error);
+    
+    // Manejar errores de validación de Sequelize
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Error de validación',
+        errors: error.errors.map(err => err.message)
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error al crear cliente',
+      error: error.message
     });
   }
 };
 
-// @desc    Update client
-// @route   PUT /api/clients/:id
-// @access  Private
+// Actualizar cliente
 const updateClient = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
-    }
+    const { id } = req.params;
+    const {
+      name,
+      contact,
+      email,
+      phone,
+      street,
+      city,
+      state,
+      zipCode,
+      country,
+      rfc,
+      clientType,
+      notes,
+      status
+    } = req.body;
 
-    let client = await Client.findById(req.params.id);
-
+    const client = await Client.findByPk(id);
+    
     if (!client) {
       return res.status(404).json({
         success: false,
-        message: 'Client not found'
+        message: 'Cliente no encontrado'
       });
     }
 
-    // Check for duplicate email/name (excluding current client)
-    const existingClient = await Client.findOne({
-      _id: { $ne: req.params.id },
-      $or: [
-        { email: req.body.email },
-        { name: req.body.name }
-      ]
-    });
-
-    if (existingClient) {
-      return res.status(400).json({
-        success: false,
-        message: 'Client already exists with this name or email'
+    // Verificar email único (excluyendo el cliente actual)
+    if (email && email.toLowerCase() !== client.email) {
+      const existingClient = await Client.findOne({
+        where: { 
+          email: email.toLowerCase(),
+          id: { [Op.not]: id }
+        }
       });
-    }
 
-    client = await Client.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true
+      if (existingClient) {
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un cliente con este email'
+        });
       }
-    ).populate('createdBy', 'firstName lastName username');
+    }
 
-    res.json({
-      success: true,
-      message: 'Client updated successfully',
-      data: client
+    // Crear dirección completa si se proporcionan los campos
+    let fullAddress = client.fullAddress;
+    if (street || city || state || zipCode || country) {
+      fullAddress = [
+        street || client.street,
+        city || client.city,
+        state || client.state,
+        zipCode || client.zipCode,
+        country || client.country
+      ].filter(Boolean).join(', ');
+    }
+
+    // Actualizar cliente
+    await client.update({
+      name: name || client.name,
+      contact: contact || client.contact,
+      email: email ? email.toLowerCase() : client.email,
+      phone: phone || client.phone,
+      street: street || client.street,
+      city: city || client.city,
+      state: state || client.state,
+      zipCode: zipCode || client.zipCode,
+      country: country || client.country,
+      fullAddress,
+      rfc: rfc || client.rfc,
+      clientType: clientType || client.clientType,
+      notes: notes !== undefined ? notes : client.notes,
+      status: status || client.status
     });
 
+    res.status(200).json({
+      success: true,
+      data: client,
+      message: 'Cliente actualizado exitosamente'
+    });
   } catch (error) {
     console.error('Update client error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
+    
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({
         success: false,
-        message: 'Client not found'
+        message: 'Error de validación',
+        errors: error.errors.map(err => err.message)
       });
     }
+    
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error al actualizar cliente',
+      error: error.message
     });
   }
 };
 
-// @desc    Delete client
-// @route   DELETE /api/clients/:id
-// @access  Private
+// Eliminar cliente (soft delete)
 const deleteClient = async (req, res) => {
   try {
-    const client = await Client.findById(req.params.id);
-
+    const { id } = req.params;
+    
+    const client = await Client.findByPk(id);
+    
     if (!client) {
       return res.status(404).json({
         success: false,
-        message: 'Client not found'
+        message: 'Cliente no encontrado'
       });
     }
 
-    await Client.findByIdAndDelete(req.params.id);
-
-    res.json({
+    // Soft delete
+    await client.destroy();
+    
+    res.status(200).json({
       success: true,
-      message: 'Client deleted successfully'
+      message: 'Cliente eliminado exitosamente'
     });
-
   } catch (error) {
     console.error('Delete client error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Client not found'
-      });
-    }
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error al eliminar cliente',
+      error: error.message
     });
   }
 };
 
-// @desc    Get client statistics
-// @route   GET /api/clients/stats
-// @access  Private
+// Obtener estadísticas de clientes
 const getClientStats = async (req, res) => {
   try {
-    const totalClients = await Client.countDocuments();
-    const activeClients = await Client.countDocuments({ status: 'active' });
-    const clientTypes = await Client.distinct('clientType');
-    const clientsWithEmail = await Client.countDocuments({ 
-      email: { $exists: true, $ne: '' } 
+    const totalClients = await Client.count();
+    const activeClients = await Client.count({ where: { status: 'active' } });
+    const inactiveClients = await Client.count({ where: { status: 'inactive' } });
+    
+    // Contar por tipo de cliente
+    const clientsByType = await Client.findAll({
+      attributes: [
+        'clientType',
+        [Client.sequelize.fn('COUNT', Client.sequelize.col('id')), 'count']
+      ],
+      group: ['clientType']
     });
 
-    res.json({
+    res.status(200).json({
       success: true,
       data: {
-        totalClients,
-        activeClients,
-        inactiveClients: totalClients - activeClients,
-        clientTypes: clientTypes.length,
-        clientsWithEmail
+        total: totalClients,
+        active: activeClients,
+        inactive: inactiveClients,
+        byType: clientsByType
       }
     });
-
   } catch (error) {
     console.error('Get client stats error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error al obtener estadísticas',
+      error: error.message
     });
   }
 };

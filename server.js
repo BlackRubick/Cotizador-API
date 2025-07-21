@@ -8,8 +8,8 @@ require('dotenv').config();
 const sequelize = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 
-// Import models to initialize associations
-require('./models');
+// ========== CORREGIDO: Import models to initialize associations ==========
+const { User, Product, Category, Client, Quote } = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -47,6 +47,9 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ MySQL connected successfully');
     
+    // ========== CORREGIDO: Verificar que las asociaciones están configuradas ==========
+    console.log('📋 Models loaded:', Object.keys(sequelize.models));
+    
     // Sync database (create tables if they don't exist)
     if (process.env.NODE_ENV === 'development') {
       await sequelize.sync({ alter: true });
@@ -74,8 +77,40 @@ app.get('/api/health', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    database: 'MySQL'
+    database: 'MySQL',
+    models: Object.keys(sequelize.models), // ← AGREGADO: para debug
+    environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// ========== AGREGADO: Endpoint de debug para verificar productos ==========
+app.get('/api/debug/products', async (req, res) => {
+  try {
+    const productCount = await Product.count();
+    const categoryCount = await Category.count();
+    const products = await Product.findAll({
+      limit: 5,
+      include: [
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+    
+    res.json({
+      productCount,
+      categoryCount,
+      sampleProducts: products,
+      message: 'Debug info for products'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
 });
 
 // Error handling middleware
@@ -95,4 +130,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🗄️  Database: MySQL`);
+  console.log(`🔧 Debug endpoint: http://localhost:${PORT}/api/debug/products`);
 });

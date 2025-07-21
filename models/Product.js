@@ -1,4 +1,4 @@
-// models/Product.js - Simplificado con solo tus campos específicos
+// models/Product.js - CORREGIDO con categoryId y relaciones apropiadas
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -23,6 +23,17 @@ const Product = sequelize.define('Product', {
       model: 'users',
       key: 'id'
     }
+  },
+  
+  // ========== AGREGADO: Relación con Category ==========
+  categoryId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'categories',
+      key: 'id'
+    },
+    comment: 'Relación con tabla categories'
   },
   
   // ========== TUS CAMPOS ESPECÍFICOS DE NEGOCIO ==========
@@ -233,14 +244,15 @@ const Product = sequelize.define('Product', {
   paranoid: true, // Para soft deletes
   indexes: [
     { fields: ['code'] },
+    { fields: ['categoryId'] },
     { fields: ['servicio'] },
     { fields: ['especialidad'] },
     { fields: ['clasificacion'] },
     { fields: ['item'] },
     { fields: ['proveedor'] },
     { fields: ['almacen'] },
-    { fields: ['factoryPrice'] },
-    { fields: ['precioVentaPaquete'] },
+    { fields: ['factory_price'] }, // ← CORREGIDO: usar el nombre de campo real
+    { fields: ['precio_venta_paquete'] }, // ← CORREGIDO: usar el nombre de campo real
     { fields: ['createdAt'] }
   ],
   hooks: {
@@ -263,7 +275,7 @@ const Product = sequelize.define('Product', {
   }
 });
 
-// Instance methods
+// Instance methods (mantenidos iguales)
 Product.prototype.getFormattedPrice = function() {
   const price = this.precioVentaPaquete || 0;
   return new Intl.NumberFormat('es-MX', {
@@ -338,8 +350,18 @@ Product.prototype.toJSON = function() {
   product.description = product.paraDescripcion || product.uso || '';
   product.brand = product.proveedor || 'N/A';
   product.basePrice = product.precioVentaPaquete || product.precioUnitario || 0;
-  product.category = product.servicio || 'General';
-  product.categoryName = product.especialidad || product.servicio || 'General';
+  
+  // ========== CORREGIDO: category y categoryName ==========
+  // Si hay categoryId, usar el nombre de la categoría asociada
+  if (this.category) {
+    product.category = this.category.name;
+    product.categoryName = this.category.name;
+  } else {
+    // Fallback usando los campos de servicio/especialidad
+    product.category = product.servicio || 'General';
+    product.categoryName = product.especialidad || product.servicio || 'General';
+  }
+  
   product.compatibility = [product.clasificacion].filter(Boolean);
   
   // Add calculated fields

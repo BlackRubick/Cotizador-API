@@ -1,5 +1,5 @@
-// controllers/productController.js - Simplificado para tus campos específicos
-const { Product, User } = require('../models');
+// controllers/productController.js - CORREGIDO para incluir relaciones
+const { Product, User, Category } = require('../models'); // ← AGREGADO: Category
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
@@ -12,6 +12,7 @@ const getProducts = async (req, res) => {
       page = 1, 
       limit = 10, 
       search, 
+      category,  // ← AGREGADO: filtro por categoría
       servicio,
       especialidad,
       clasificacion,
@@ -35,6 +36,17 @@ const getProducts = async (req, res) => {
         { paraDescripcion: { [Op.iLike]: `%${search}%` } },
         { proveedor: { [Op.iLike]: `%${search}%` } }
       ];
+    }
+    
+    // ========== AGREGADO: Filtro por categoría ==========
+    if (category) {
+      if (isNaN(category)) {
+        // Si category es un nombre, buscar por el nombre de la categoría
+        whereClause['$category.name$'] = { [Op.iLike]: `%${category}%` };
+      } else {
+        // Si es un ID, buscar por categoryId
+        whereClause.categoryId = category;
+      }
     }
     
     if (servicio) {
@@ -74,6 +86,8 @@ const getProducts = async (req, res) => {
       orderClause.push([sortField, sortDirection]);
     }
 
+    console.log('Product query whereClause:', whereClause); // ← DEBUG
+
     const { count, rows: products } = await Product.findAndCountAll({
       where: whereClause,
       include: [
@@ -81,12 +95,21 @@ const getProducts = async (req, res) => {
           model: User,
           as: 'creator',
           attributes: ['firstName', 'lastName', 'username']
+        },
+        // ========== AGREGADO: Incluir categoría ==========
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name', 'description'],
+          required: false // LEFT JOIN para incluir productos sin categoría
         }
       ],
       order: orderClause,
       limit: parseInt(limit),
       offset: offset
     });
+
+    console.log(`Found ${count} products, returning ${products.length}`); // ← DEBUG
 
     res.json({
       success: true,
@@ -103,7 +126,8 @@ const getProducts = async (req, res) => {
     console.error('Get products error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -119,6 +143,12 @@ const getProduct = async (req, res) => {
           model: User,
           as: 'creator',
           attributes: ['firstName', 'lastName', 'username']
+        },
+        // ========== AGREGADO: Incluir categoría ==========
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name', 'description']
         }
       ]
     });
@@ -169,6 +199,17 @@ const createProduct = async (req, res) => {
       });
     }
 
+    // ========== AGREGADO: Validar categoryId si se proporciona ==========
+    if (req.body.categoryId) {
+      const category = await Category.findByPk(req.body.categoryId);
+      if (!category) {
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found'
+        });
+      }
+    }
+
     const productData = {
       ...req.body,
       createdBy: req.user.id,
@@ -184,6 +225,11 @@ const createProduct = async (req, res) => {
           model: User,
           as: 'creator',
           attributes: ['firstName', 'lastName', 'username']
+        },
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name', 'description']
         }
       ]
     });
@@ -242,6 +288,17 @@ const updateProduct = async (req, res) => {
       }
     }
 
+    // ========== AGREGADO: Validar categoryId si se proporciona ==========
+    if (req.body.categoryId) {
+      const category = await Category.findByPk(req.body.categoryId);
+      if (!category) {
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found'
+        });
+      }
+    }
+
     // Update product
     const updateData = { ...req.body };
     if (req.body.code) {
@@ -257,6 +314,11 @@ const updateProduct = async (req, res) => {
           model: User,
           as: 'creator',
           attributes: ['firstName', 'lastName', 'username']
+        },
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name', 'description']
         }
       ]
     });
@@ -354,13 +416,32 @@ const getProductStats = async (req, res) => {
       limit: 10
     });
 
+    // ========== AGREGADO: Categorías stats ==========
+    const categoryStats = await Product.findAll({
+      attributes: [
+        [Product.sequelize.fn('COUNT', Product.sequelize.col('Product.id')), 'count']
+      ],
+      include: [
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name'],
+          required: true
+        }
+      ],
+      group: ['category.id', 'category.name'],
+      order: [[Product.sequelize.fn('COUNT', Product.sequelize.col('Product.id')), 'DESC']],
+      limit: 10
+    });
+
     res.json({
       success: true,
       data: {
         totalProducts,
         servicioStats,
         especialidadStats,
-        proveedorStats
+        proveedorStats,
+        categoryStats
       }
     });
 

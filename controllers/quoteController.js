@@ -1,7 +1,7 @@
-const Quote = require('../models/Quote');
-const Client = require('../models/Client');
-const Product = require('../models/Product');
+// controllers/quoteController.js - CORREGIDO para Sequelize/MySQL
+const { Quote, Client, User } = require('../models');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
 
 // @desc    Get all quotes
 // @route   GET /api/quotes
@@ -12,45 +12,57 @@ const getQuotes = async (req, res) => {
       page = 1, 
       limit = 10, 
       status, 
-      client, 
+      clientId, 
       dateFrom, 
       dateTo,
       search 
     } = req.query;
     
-    // Build query
-    let query = {};
+    // Build where clause
+    let whereClause = {};
     
     if (status) {
-      query.status = status;
+      whereClause.status = status;
     }
     
-    if (client) {
-      query.client = client;
+    if (clientId) {
+      whereClause.clientId = clientId;
     }
     
     if (dateFrom || dateTo) {
-      query.createdAt = {};
-      if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) query.createdAt.$lte = new Date(dateTo);
+      whereClause.createdAt = {};
+      if (dateFrom) whereClause.createdAt[Op.gte] = new Date(dateFrom);
+      if (dateTo) whereClause.createdAt[Op.lte] = new Date(dateTo);
     }
     
     if (search) {
-      query.$or = [
-        { folio: { $regex: search, $options: 'i' } },
-        { 'clientInfo.name': { $regex: search, $options: 'i' } },
-        { 'clientInfo.contact': { $regex: search, $options: 'i' } }
+      whereClause[Op.or] = [
+        { folio: { [Op.iLike]: `%${search}%` } },
+        { clientInfoName: { [Op.iLike]: `%${search}%` } },
+        { clientInfoContact: { [Op.iLike]: `%${search}%` } }
       ];
     }
 
-    const quotes = await Quote.find(query)
-      .populate('client', 'name contact email')
-      .populate('createdBy', 'firstName lastName username')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    const total = await Quote.countDocuments(query);
+    const { count, rows: quotes } = await Quote.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: Client,
+          as: 'client',
+          attributes: ['name', 'contact', 'email']
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: offset
+    });
 
     res.json({
       success: true,
@@ -58,8 +70,8 @@ const getQuotes = async (req, res) => {
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+        total: count,
+        pages: Math.ceil(count / parseInt(limit))
       }
     });
 
@@ -77,10 +89,20 @@ const getQuotes = async (req, res) => {
 // @access  Private
 const getQuote = async (req, res) => {
   try {
-    const quote = await Quote.findById(req.params.id)
-      .populate('client', 'name contact email phone address')
-      .populate('createdBy', 'firstName lastName username')
-      .populate('notes.createdBy', 'firstName lastName username');
+    const quote = await Quote.findByPk(req.params.id, {
+      include: [
+        {
+          model: Client,
+          as: 'client',
+          attributes: ['name', 'contact', 'email', 'phone', 'fullAddress']
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
+    });
 
     if (!quote) {
       return res.status(404).json({
@@ -96,12 +118,6 @@ const getQuote = async (req, res) => {
 
   } catch (error) {
     console.error('Get quote error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Quote not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -122,85 +138,139 @@ const createQuote = async (req, res) => {
       });
     }
 
-    const { client: clientId, products, terms } = req.body;
+    console.log('📥 Create quote request body:', req.body);
 
-    // Verify client exists
-    const client = await Client.findById(clientId);
-    if (!client) {
-      return res.status(404).json({
+    const { 
+      clientId, 
+      clientName,
+      clientContact, 
+      email,
+      phone,
+      clientAddress,
+      clientPosition,
+      products, 
+      terms 
+    } = req.body;
+
+    // Validar que tenemos la información mínima necesaria
+    if (!email) {
+      return res.status(400).json({
         success: false,
-        message: 'Client not found'
+        message: 'Email del cliente es requerido'
       });
     }
 
-    // Verify products exist and calculate totals
-    const quoteProducts = [];
-    let subtotal = 0;
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Al menos un producto es requerido'
+      });
+    }
 
-    for (const item of products) {
-      const product = await Product.findById(item.productId);
-      if (!product) {
+    // Verificar cliente existe si se proporciona clientId
+    let client = null;
+    if (clientId) {
+      client = await Client.findByPk(clientId);
+      if (!client) {
         return res.status(404).json({
           success: false,
-          message: `Product not found: ${item.productId}`
+          message: 'Cliente no encontrado'
         });
       }
-
-      const productTotal = item.quantity * item.unitPrice;
-      subtotal += productTotal;
-
-      quoteProducts.push({
-        productId: product._id,
-        code: product.code,
-        name: product.name,
-        brand: product.brand,
-        category: product.categoryName,
-        description: product.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice: productTotal
-      });
     }
 
+    // Preparar productos para la cotización
+    const quoteProducts = products.map(item => ({
+      productId: item.id || item.productId,
+      code: item.code,
+      name: item.name,
+      brand: item.brand || 'N/A',
+      category: item.category || item.categoryName || 'N/A',
+      description: item.description || '',
+      quantity: item.quantity,
+      unitPrice: item.basePrice || item.unitPrice,
+      totalPrice: (item.quantity || 1) * (item.basePrice || item.unitPrice || 0)
+    }));
+
+    console.log('🛒 Processed products:', quoteProducts);
+
+    // Calcular totales
+    const subtotal = quoteProducts.reduce((sum, product) => sum + (product.totalPrice || 0), 0);
+    const taxAmount = subtotal * 0.16; // 16% IVA
+    const total = subtotal + taxAmount;
+
+    // Crear datos de la cotización
     const quoteData = {
-      client: clientId,
-      clientInfo: {
-        name: client.name,
-        contact: client.contact,
-        email: client.email,
-        phone: client.phone,
-        address: client.address.full || client.address,
-        position: req.body.clientInfo?.position || ''
-      },
+      clientId: clientId || null,
+      clientInfoName: clientName || client?.name || 'Cliente',
+      clientInfoContact: clientContact || client?.contact || 'Contacto',
+      clientInfoEmail: email,
+      clientInfoPhone: phone || client?.phone || '',
+      clientInfoAddress: clientAddress || client?.fullAddress || '',
+      clientInfoPosition: clientPosition || '',
       products: quoteProducts,
-      subtotal,
-      terms: terms || {},
+      subtotal: subtotal,
+      taxAmount: taxAmount,
+      total: total,
+      currency: 'MXN',
+      status: 'draft',
+      termsPaymentConditions: terms?.paymentConditions || '100% Anticipado a la entrega. (Transferencia Bancaria)',
+      termsDeliveryTime: terms?.deliveryTime || '15 días hábiles',
+      termsWarranty: terms?.warranty || 'Garantía: 12 meses sobre defectos de fabricación.',
+      termsObservations: terms?.observations || 'Sin más por el momento, nos ponemos a sus órdenes para cualquier duda y/o información adicional.',
+      termsValidUntil: terms?.validUntil || null,
       createdBy: req.user.id
     };
 
-    const quote = new Quote(quoteData);
-    await quote.save();
-
-    // Update client stats
-    await Client.findByIdAndUpdate(clientId, {
-      $inc: { totalQuotes: 1 },
-      lastQuoteDate: new Date()
+    console.log('💾 Quote data to save:', {
+      ...quoteData,
+      products: `${quoteData.products.length} productos`
     });
 
-    await quote.populate('client', 'name contact email');
-    await quote.populate('createdBy', 'firstName lastName username');
+    // Crear la cotización
+    const quote = await Quote.create(quoteData);
+
+    console.log('✅ Quote created with ID:', quote.id);
+
+    // Actualizar estadísticas del cliente si existe
+    if (clientId && client) {
+      await Client.update(
+        { 
+          totalQuotes: client.totalQuotes + 1,
+          lastQuoteDate: new Date()
+        },
+        { where: { id: clientId } }
+      );
+    }
+
+    // Cargar la cotización creada con sus relaciones
+    const createdQuote = await Quote.findByPk(quote.id, {
+      include: [
+        {
+          model: Client,
+          as: 'client',
+          attributes: ['name', 'contact', 'email']
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
+    });
 
     res.status(201).json({
       success: true,
-      message: 'Quote created successfully',
-      data: quote
+      message: 'Cotización creada exitosamente',
+      data: createdQuote
     });
 
   } catch (error) {
-    console.error('Create quote error:', error);
+    console.error('❌ Create quote error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error del servidor al crear cotización',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -218,12 +288,12 @@ const updateQuote = async (req, res) => {
       });
     }
 
-    let quote = await Quote.findById(req.params.id);
+    let quote = await Quote.findByPk(req.params.id);
 
     if (!quote) {
       return res.status(404).json({
         success: false,
-        message: 'Quote not found'
+        message: 'Cotización no encontrada'
       });
     }
 
@@ -231,37 +301,39 @@ const updateQuote = async (req, res) => {
     if (['confirmed', 'rejected', 'cancelled'].includes(quote.status)) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot edit quote with current status'
+        message: 'No se puede editar una cotización con estado actual'
       });
     }
 
-    quote = await Quote.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true
-      }
-    ).populate('client', 'name contact email')
-     .populate('createdBy', 'firstName lastName username');
+    await quote.update(req.body);
+
+    // Reload with associations
+    const updatedQuote = await Quote.findByPk(req.params.id, {
+      include: [
+        {
+          model: Client,
+          as: 'client',
+          attributes: ['name', 'contact', 'email']
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
+    });
 
     res.json({
       success: true,
-      message: 'Quote updated successfully',
-      data: quote
+      message: 'Cotización actualizada exitosamente',
+      data: updatedQuote
     });
 
   } catch (error) {
     console.error('Update quote error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Quote not found'
-      });
-    }
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error del servidor'
     });
   }
 };
@@ -277,43 +349,48 @@ const updateQuoteStatus = async (req, res) => {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid status'
+        message: 'Estado inválido'
       });
     }
 
-    const quote = await Quote.findById(req.params.id);
+    const quote = await Quote.findByPk(req.params.id);
     
     if (!quote) {
       return res.status(404).json({
         success: false,
-        message: 'Quote not found'
+        message: 'Cotización no encontrada'
       });
     }
 
     // Update status and related dates
-    quote.status = status;
+    const updateData = { status };
     
     switch (status) {
       case 'sent':
-        quote.sentDate = new Date();
+        updateData.sentDate = new Date();
         break;
       case 'confirmed':
-        quote.confirmedDate = new Date();
-        // Update client total amount
-        await Client.findByIdAndUpdate(quote.client, {
-          $inc: { totalAmount: quote.total }
-        });
+        updateData.confirmedDate = new Date();
+        // Update client total amount if client exists
+        if (quote.clientId) {
+          const client = await Client.findByPk(quote.clientId);
+          if (client) {
+            await client.update({
+              totalAmount: parseFloat(client.totalAmount || 0) + parseFloat(quote.total)
+            });
+          }
+        }
         break;
       case 'rejected':
-        quote.rejectedDate = new Date();
+        updateData.rejectedDate = new Date();
         break;
     }
 
-    await quote.save();
+    await quote.update(updateData);
 
     res.json({
       success: true,
-      message: 'Quote status updated successfully',
+      message: 'Estado de cotización actualizado exitosamente',
       data: quote
     });
 
@@ -321,7 +398,7 @@ const updateQuoteStatus = async (req, res) => {
     console.error('Update quote status error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error del servidor'
     });
   }
 };
@@ -331,12 +408,12 @@ const updateQuoteStatus = async (req, res) => {
 // @access  Private
 const deleteQuote = async (req, res) => {
   try {
-    const quote = await Quote.findById(req.params.id);
+    const quote = await Quote.findByPk(req.params.id);
 
     if (!quote) {
       return res.status(404).json({
         success: false,
-        message: 'Quote not found'
+        message: 'Cotización no encontrada'
       });
     }
 
@@ -344,33 +421,32 @@ const deleteQuote = async (req, res) => {
     if (quote.status !== 'draft') {
       return res.status(400).json({
         success: false,
-        message: 'Only draft quotes can be deleted'
+        message: 'Solo se pueden eliminar cotizaciones en borrador'
       });
     }
 
-    await Quote.findByIdAndDelete(req.params.id);
+    await quote.destroy();
 
-    // Update client stats
-    await Client.findByIdAndUpdate(quote.client, {
-      $inc: { totalQuotes: -1 }
-    });
+    // Update client stats if client exists
+    if (quote.clientId) {
+      const client = await Client.findByPk(quote.clientId);
+      if (client && client.totalQuotes > 0) {
+        await client.update({
+          totalQuotes: client.totalQuotes - 1
+        });
+      }
+    }
 
     res.json({
       success: true,
-      message: 'Quote deleted successfully'
+      message: 'Cotización eliminada exitosamente'
     });
 
   } catch (error) {
     console.error('Delete quote error:', error);
-    if (error.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Quote not found'
-      });
-    }
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error del servidor'
     });
   }
 };
@@ -380,15 +456,18 @@ const deleteQuote = async (req, res) => {
 // @access  Private
 const getQuoteStats = async (req, res) => {
   try {
-    const totalQuotes = await Quote.countDocuments();
-    const confirmedQuotes = await Quote.countDocuments({ status: 'confirmed' });
-    const pendingQuotes = await Quote.countDocuments({ status: 'pending' });
-    const rejectedQuotes = await Quote.countDocuments({ status: 'rejected' });
+    const totalQuotes = await Quote.count();
+    const confirmedQuotes = await Quote.count({ where: { status: 'confirmed' } });
+    const pendingQuotes = await Quote.count({ where: { status: 'pending' } });
+    const rejectedQuotes = await Quote.count({ where: { status: 'rejected' } });
     
-    const totalValue = await Quote.aggregate([
-      { $match: { status: 'confirmed' } },
-      { $group: { _id: null, total: { $sum: '$total' } } }
-    ]);
+    // Calculate total value of confirmed quotes
+    const confirmedQuotesData = await Quote.findAll({
+      where: { status: 'confirmed' },
+      attributes: ['total']
+    });
+    
+    const totalValue = confirmedQuotesData.reduce((sum, quote) => sum + parseFloat(quote.total || 0), 0);
 
     res.json({
       success: true,
@@ -397,7 +476,7 @@ const getQuoteStats = async (req, res) => {
         confirmedQuotes,
         pendingQuotes,
         rejectedQuotes,
-        totalValue: totalValue[0]?.total || 0
+        totalValue
       }
     });
 
@@ -405,7 +484,7 @@ const getQuoteStats = async (req, res) => {
     console.error('Get quote stats error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Error del servidor'
     });
   }
 };

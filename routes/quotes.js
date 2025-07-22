@@ -1,3 +1,4 @@
+// routes/quotes.js - CORREGIDO para Sequelize/MySQL
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
@@ -14,33 +15,44 @@ const {
 
 const { auth } = require('../middleware/auth');
 
-// Validation rules
+// Validation rules para crear cotización
 const quoteValidation = [
-  body('client')
-    .notEmpty()
-    .withMessage('Client is required')
-    .isMongoId()
-    .withMessage('Invalid client ID'),
+  body('email')
+    .isEmail()
+    .withMessage('Email del cliente es requerido'),
   body('products')
     .isArray({ min: 1 })
-    .withMessage('At least one product is required'),
-  body('products.*.productId')
-    .notEmpty()
-    .withMessage('Product ID is required')
-    .isMongoId()
-    .withMessage('Invalid product ID'),
+    .withMessage('Al menos un producto es requerido'),
   body('products.*.quantity')
     .isInt({ min: 1 })
-    .withMessage('Quantity must be at least 1'),
-  body('products.*.unitPrice')
+    .withMessage('La cantidad debe ser al menos 1'),
+  body('products.*.basePrice')
+    .optional()
     .isFloat({ min: 0 })
-    .withMessage('Unit price must be a positive number')
+    .withMessage('El precio debe ser un número positivo'),
+  body('products.*.unitPrice')
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage('El precio unitario debe ser un número positivo'),
+  body('clientId')
+    .optional()
+    .isInt()
+    .withMessage('ID de cliente inválido'),
+  body('clientName')
+    .optional()
+    .notEmpty()
+    .withMessage('Nombre del cliente es requerido si no se proporciona clientId'),
+  body('clientContact')
+    .optional()
+    .notEmpty()
+    .withMessage('Contacto del cliente es requerido')
 ];
 
+// Validation rules para actualizar estado
 const statusUpdateValidation = [
   body('status')
     .isIn(['draft', 'sent', 'pending', 'confirmed', 'rejected', 'cancelled', 'expired'])
-    .withMessage('Invalid status')
+    .withMessage('Estado inválido')
 ];
 
 // Apply auth middleware to all routes

@@ -1,4 +1,4 @@
-// controllers/categoryController.js
+// controllers/categoryController.js - VERSIÓN FINAL CORREGIDA
 const { Category, Product, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
@@ -8,25 +8,36 @@ const { Op } = require('sequelize');
 // @access  Private
 const getCategories = async (req, res) => {
   try {
-    const { active = true, includeProducts = false } = req.query;
+    const { active, includeProducts = false } = req.query;
     
     let whereClause = {};
-    if (active !== 'all') {
-      whereClause.isActive = active === 'true';
+    
+    // Solo filtrar por isActive si se especifica explícitamente
+    if (active !== undefined && active !== 'all') {
+      if (active === 'true' || active === true) {
+        whereClause.isActive = true;
+      } else if (active === 'false' || active === false) {
+        whereClause.isActive = false;
+      }
     }
+
+    console.log('🔍 Category query - whereClause:', whereClause);
 
     let includeOptions = [
       {
         model: User,
         as: 'creator',
-        attributes: ['firstName', 'lastName', 'username']
+        attributes: ['firstName', 'lastName', 'username'],
+        required: false
       }
     ];
 
     if (includeProducts === 'true') {
       includeOptions.push({
-        model: Category,
-        as: 'subcategories'
+        model: Product,
+        as: 'products',
+        attributes: ['id', 'code', 'item'],
+        required: false
       });
     }
 
@@ -36,16 +47,19 @@ const getCategories = async (req, res) => {
       order: [['sortOrder', 'ASC'], ['name', 'ASC']]
     });
 
+    console.log(`📦 Categories found: ${categories.length}`);
+
     res.json({
       success: true,
       data: categories
     });
 
   } catch (error) {
-    console.error('Get categories error:', error);
+    console.error('❌ Get categories error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -70,6 +84,11 @@ const getCategory = async (req, res) => {
         {
           model: Category,
           as: 'subcategories'
+        },
+        {
+          model: Product,
+          as: 'products',
+          attributes: ['id', 'code', 'item', 'precioVentaPaquete']
         }
       ]
     });
@@ -81,21 +100,9 @@ const getCategory = async (req, res) => {
       });
     }
 
-    // Get products in this category
-    const products = await Product.findAll({ 
-      where: { 
-        categoryId: req.params.id,
-        status: 'active' 
-      },
-      attributes: ['name', 'code', 'basePrice']
-    });
-
     res.json({
       success: true,
-      data: {
-        ...category.toJSON(),
-        products
-      }
+      data: category
     });
 
   } catch (error) {
@@ -136,17 +143,6 @@ const createCategory = async (req, res) => {
       });
     }
 
-    // Validate parent category if provided
-    if (req.body.parentCategoryId) {
-      const parentCategory = await Category.findByPk(req.body.parentCategoryId);
-      if (!parentCategory) {
-        return res.status(404).json({
-          success: false,
-          message: 'Parent category not found'
-        });
-      }
-    }
-
     const categoryData = {
       ...req.body,
       createdBy: req.user.id
@@ -154,7 +150,6 @@ const createCategory = async (req, res) => {
 
     const category = await Category.create(categoryData);
 
-    // Load the created category with associations
     const createdCategory = await Category.findByPk(category.id, {
       include: [
         {
@@ -219,39 +214,14 @@ const updateCategory = async (req, res) => {
       }
     }
 
-    // Validate parent category if provided
-    if (req.body.parentCategoryId) {
-      const parentCategory = await Category.findByPk(req.body.parentCategoryId);
-      if (!parentCategory) {
-        return res.status(404).json({
-          success: false,
-          message: 'Parent category not found'
-        });
-      }
-
-      // Prevent circular reference
-      if (req.body.parentCategoryId == req.params.id) {
-        return res.status(400).json({
-          success: false,
-          message: 'Category cannot be its own parent'
-        });
-      }
-    }
-
     await category.update(req.body);
 
-    // Reload with associations
     const updatedCategory = await Category.findByPk(req.params.id, {
       include: [
         {
           model: User,
           as: 'creator',
           attributes: ['firstName', 'lastName', 'username']
-        },
-        {
-          model: Category,
-          as: 'parentCategory',
-          attributes: ['name']
         }
       ]
     });
@@ -294,18 +264,6 @@ const deleteCategory = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Cannot delete category. It contains products.'
-      });
-    }
-
-    // Check if category has subcategories
-    const subcategoryCount = await Category.count({ 
-      where: { parentCategoryId: req.params.id } 
-    });
-    
-    if (subcategoryCount > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete category. It has subcategories.'
       });
     }
 

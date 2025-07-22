@@ -1,184 +1,136 @@
-// @ts-nocheck
+// data/seedCorrectCategories.js
 const sequelize = require('../config/database');
-const { User, Category, Product, Client, Quote } = require('../models');
+const { User, Category, Product } = require('../models');
 require('dotenv').config();
 
-// Run the seeder immediately
-(async () => {
-  try {
-    // Connect and sync database
-    console.log('🔄 Connecting to MySQL...');
-    await sequelize.authenticate();
-    console.log('✅ MySQL connected successfully');
-
-    // Force sync (this will drop and recreate tables)
-    console.log('🔄 Synchronizing database...');
-    await sequelize.sync({ force: true });
-    console.log('📊 Database synchronized');
-
-    console.log('👤 Creating users...');
-    
-    // Create admin user
-    const adminUser = await User.create({
-      username: 'admin',
-      email: 'admin@cotizador.com',
-      password: 'password123',
-      firstName: 'Administrador',
-      lastName: 'Sistema',
-      phone: '+529611234567',
-      role: 'admin',
-      position: 'Administrador del Sistema'
-    });
-
-    // Create regular user
-    const regularUser = await User.create({
-      username: 'usuario',
-      email: 'usuario@cotizador.com',
-      password: 'password123',
-      firstName: 'Juan Carlos',
-      lastName: 'González',
-      phone: '+529612345678',
-      role: 'user',
-      position: 'Ejecutivo de Ventas'
-    });
-
-    console.log('📁 Creating categories...');
-    
-    // Create categories
-    const xprezzonCategory = await Category.create({
-      name: 'XPREZZON',
-      description: 'Monitores de signos vitales y equipos de monitoreo cardiaco',
-      createdBy: adminUser.id,
-      sortOrder: 1
-    });
-
-    const cubeCategory = await Category.create({
-      name: 'CUBE',
-      description: 'Sistemas de monitoreo avanzados y estaciones de trabajo',
-      createdBy: adminUser.id,
-      sortOrder: 2
-    });
-
-    const csuCategory = await Category.create({
-      name: 'CSU',
-      description: 'Unidades de control central y módulos de sistema',
-      createdBy: adminUser.id,
-      sortOrder: 3
-    });
-
-    console.log('📦 Creating products...');
-    
-    // Create products for XPREZZON
-    const xprezzonProducts = await Product.bulkCreate([
-      {
-        code: 'VOO-XPRE-04',
-        name: 'Monitor Cardiaco Estándar IV',
-        description: 'Monitor cardiaco con pantalla de 15 pulgadas, incluye ECG, SpO2 y NIBP',
-        categoryId: xprezzonCategory.id,
-        categoryName: 'XPREZZON',
-        brand: 'Mindray',
-        basePrice: 15500.00,
-        compatibility: ['ADULTO', 'PEDIÁTRICO', 'NEONATAL'],
-        accessories: [
-          { name: 'Cable ECG', code: 'ECG-001', price: 250, included: true },
-          { name: 'Sensor SpO2', code: 'SPO2-001', price: 180, included: true }
-        ],
-        stockQuantity: 10,
-        stockMinStock: 3,
-        stockLocation: 'Almacén A',
-        createdBy: adminUser.id
-      },
-      {
-        code: 'VOO-XPRE-05',
-        name: 'Transductor De Presión',
-        description: 'Transductor de presión arterial invasiva con alta precisión',
-        categoryId: xprezzonCategory.id,
-        categoryName: 'XPREZZON',
-        brand: 'Edwards Lifesciences',
-        basePrice: 8500.00,
-        compatibility: ['ADULTO', 'PEDIÁTRICO'],
-        accessories: [
-          { name: 'Cable de conexión', code: 'CABLE-001', price: 120, included: true }
-        ],
-        stockQuantity: 15,
-        stockMinStock: 5,
-        stockLocation: 'Almacén A',
-        createdBy: adminUser.id
-      },
-      {
-        code: 'VOO-XPRE-06',
-        name: 'Set de Cables Estándar IV',
-        description: 'Set completo de cables para monitoreo multiparamétrico',
-        categoryId: xprezzonCategory.id,
-        categoryName: 'XPREZZON',
-        brand: 'Philips',
-        basePrice: 3200.00,
-        compatibility: ['ADULTO', 'PEDIÁTRICO', 'NEONATAL'],
-        accessories: [
-          { name: 'Cable ECG 5 derivaciones', code: 'ECG-5-001', price: 300, included: true },
-          { name: 'Cable SpO2', code: 'SPO2-002', price: 180, included: true },
-          { name: 'Cable NIBP', code: 'NIBP-001', price: 220, included: true }
-        ],
-        stockQuantity: 25,
-        stockMinStock: 8,
-        stockLocation: 'Almacén B',
-        createdBy: adminUser.id
-      }
-    ]);
-
-    // Create products for CUBE and CSU...
-    const cubeProducts = await Product.bulkCreate([
-      {
-        code: 'CUBE-MON-01',
-        name: 'CUBE Monitor Station',
-        description: 'Estación de monitoreo CUBE con pantalla táctil de 21 pulgadas',
-        categoryId: cubeCategory.id,
-        categoryName: 'CUBE',
-        brand: 'Drager',
-        basePrice: 25000.00,
-        compatibility: ['HOSPITAL', 'CLÍNICA'],
-        accessories: [
-          { name: 'Pantalla táctil', code: 'TOUCH-001', price: 0, included: true }
-        ],
-        stockQuantity: 5,
-        stockMinStock: 2,
-        stockLocation: 'Almacén C',
-        createdBy: adminUser.id
-      }
-    ]);
-
-    console.log('👥 Creating clients...');
-    
-    const clients = await Client.bulkCreate([
-      {
-        name: 'Hospital General de Tuxtla',
-        contact: 'Dr. Eduardo Ramírez',
-        email: 'contacto@hospitalgeneral.com',
-        phone: '+529612345678',
-        street: 'Av. Central 123',
-        city: 'Tuxtla Gutiérrez',
-        state: 'Chiapas',
-        zipCode: '29000',
-        country: 'México',
-        rfc: 'HGT850101ABC',
-        clientType: 'Hospital',
-        createdBy: adminUser.id
-      }
-    ]);
-
-    console.log('✅ Database seeded successfully!');
-    console.log(`   - Users: ${await User.count()}`);
-    console.log(`   - Categories: ${await Category.count()}`);
-    console.log(`   - Products: ${await Product.count()}`);
-    console.log(`   - Clients: ${await Client.count()}`);
-    console.log('\n🔑 Default login credentials:');
-    console.log('   Admin: admin / password123');
-    console.log('   User:  usuario / password123');
-    
-  } catch (error) {
-    console.error('❌ Error seeding database:', error);
-  } finally {
-    await sequelize.close();
-    process.exit(0);
+const correctCategories = [
+  {
+    name: 'ELECTRODO',
+    description: 'Electrodos desechables y reutilizables para monitoreo cardiaco',
+    sortOrder: 1
+  },
+  {
+    name: 'PARCHES',
+    description: 'Parches adhesivos para fijación de sensores y electrodos',
+    sortOrder: 2
+  },
+  {
+    name: 'BRAZALETE BP',
+    description: 'Brazaletes para medición de presión arterial (adulto, pediátrico, neonatal)',
+    sortOrder: 3
+  },
+  {
+    name: 'SENSOR',
+    description: 'Sensores de temperatura, SpO2, presión y otros parámetros vitales',
+    sortOrder: 4
+  },
+  {
+    name: 'Componentes de interconexión',
+    description: 'Cables, adaptadores y componentes para interconexión de equipos',
+    sortOrder: 5
+  },
+  {
+    name: 'SONDA',
+    description: 'Sondas y transductores para mediciones especializadas',
+    sortOrder: 6
+  },
+  {
+    name: 'CIRCUITO PACIENTE',
+    description: 'Circuitos y tubos para ventilación y otros sistemas de soporte vital',
+    sortOrder: 7
+  },
+  {
+    name: 'ACCESORIO',
+    description: 'Accesorios diversos para equipos médicos',
+    sortOrder: 8
+  },
+  {
+    name: 'Prueba',
+    description: 'Categoría para productos de prueba y testing',
+    sortOrder: 9
   }
-})();
+];
+
+// Función para limpiar y crear categorías correctas
+const seedCorrectCategories = async () => {
+  try {
+    console.log('🔄 Conectando a la base de datos...');
+    await sequelize.authenticate();
+    console.log('✅ Conectado a MySQL');
+
+    // Verificar que existe un usuario admin
+    let adminUser = await User.findOne({ where: { role: 'admin' } });
+    
+    if (!adminUser) {
+      console.log('👤 Creando usuario admin...');
+      adminUser = await User.create({
+        username: 'admin',
+        email: 'admin@cotizador.com',
+        password: 'password123',
+        firstName: 'Administrador',
+        lastName: 'Sistema',
+        phone: '+529611234567',
+        role: 'admin',
+        position: 'Administrador del Sistema'
+      });
+    }
+
+    console.log('🗑️ Limpiando categorías anteriores...');
+    
+    // Primero, desasociar productos de categorías
+    await Product.update({ categoryId: null }, { where: {} });
+    console.log('📦 Productos desasociados de categorías');
+    
+    // Eliminar categorías anteriores
+    await Category.destroy({ where: {}, force: true });
+    console.log('🗑️ Categorías anteriores eliminadas');
+
+    console.log('📁 Creando categorías correctas...');
+    
+    const createdCategories = [];
+    
+    for (const categoryData of correctCategories) {
+      const category = await Category.create({
+        ...categoryData,
+        createdBy: adminUser.id,
+        isActive: true
+      });
+      
+      createdCategories.push(category);
+      console.log(`✅ Creada: ${category.name} (ID: ${category.id})`);
+    }
+
+    console.log('\n🎉 Categorías creadas exitosamente!');
+    console.log(`   Total: ${createdCategories.length} categorías`);
+
+    // Mostrar resumen
+    console.log('\n📋 Resumen de categorías:');
+    createdCategories.forEach(cat => {
+      console.log(`   ${cat.id}. ${cat.name}`);
+    });
+
+    console.log('\n🔧 Próximo paso: Ejecutar script para asociar productos a categorías');
+    console.log('   Comando: node scripts/associateProductsToCategories.js');
+
+    return createdCategories;
+
+  } catch (error) {
+    console.error('❌ Error creando categorías:', error);
+    throw error;
+  }
+};
+
+// Ejecutar si se llama directamente
+if (require.main === module) {
+  seedCorrectCategories()
+    .then(() => {
+      console.log('✅ Proceso completado');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ Error en el proceso:', error);
+      process.exit(1);
+    });
+}
+
+module.exports = { seedCorrectCategories, correctCategories };

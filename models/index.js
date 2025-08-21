@@ -1,4 +1,4 @@
-// models/index.js - CORREGIDO sin duplicar asociaciones
+// models/index.js - ACTUALIZADO con Equipment
 const sequelize = require('../config/database');
 
 // Importar todos los modelos
@@ -7,6 +7,7 @@ const Product = require('./Product');
 const Category = require('./Category');
 const Client = require('./Client');
 const Quote = require('./Quote');
+const Equipment = require('./Equipment'); // ← NUEVO
 
 // Configurar solo las asociaciones que NO están en los modelos individuales
 // ========================================================================
@@ -16,6 +17,7 @@ User.hasMany(Product, { foreignKey: 'createdBy', as: 'products' });
 User.hasMany(Category, { foreignKey: 'createdBy', as: 'categories' });
 User.hasMany(Client, { foreignKey: 'createdBy', as: 'clients' });
 User.hasMany(Quote, { foreignKey: 'createdBy', as: 'quotes' });
+User.hasMany(Equipment, { foreignKey: 'createdBy', as: 'equipment' }); // ← NUEVO
 
 // Product associations (estas NO están en Product.js)
 Product.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
@@ -29,10 +31,15 @@ Category.hasMany(Product, { foreignKey: 'categoryId', as: 'products' });
 // Client associations (estas NO están en Client.js)
 Client.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 Client.hasMany(Quote, { foreignKey: 'clientId', as: 'quotes' });
+Client.hasMany(Equipment, { foreignKey: 'clientId', as: 'equipment' }); // ← NUEVO
 
 // Quote associations (estas NO están en Quote.js)
 Quote.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 Quote.belongsTo(Client, { foreignKey: 'clientId', as: 'client' });
+
+// Equipment associations (nuevas asociaciones)
+Equipment.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+Equipment.belongsTo(Client, { foreignKey: 'clientId', as: 'client' });
 
 module.exports = {
   sequelize,
@@ -40,5 +47,6 @@ module.exports = {
   Product,
   Category,
   Client,
-  Quote
+  Quote,
+  Equipment 
 };

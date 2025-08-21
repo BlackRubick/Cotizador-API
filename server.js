@@ -9,7 +9,7 @@ const sequelize = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 
 // ========== CORREGIDO: Import models to initialize associations ==========
-const { User, Product, Category, Client, Quote } = require('./models');
+const { User, Product, Category, Client, Quote, Equipment } = require('./models'); // ← AGREGADO Equipment
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -18,6 +18,7 @@ const clientRoutes = require('./routes/clients');
 const quoteRoutes = require('./routes/quotes');
 const productRoutes = require('./routes/products');
 const categoryRoutes = require('./routes/categories');
+const equipmentRoutes = require('./routes/equipment'); // ← NUEVO
 
 const app = express();
 
@@ -66,10 +67,11 @@ connectDB();
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/clients', clientRoutes);
+app.use('/api/clients', clientRoutes); // ← Ya incluye rutas de equipment por cliente
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/equipment', equipmentRoutes); // ← NUEVO: rutas individuales de equipment
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -81,6 +83,36 @@ app.get('/api/health', (req, res) => {
     models: Object.keys(sequelize.models), // ← AGREGADO: para debug
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// ========== AGREGADO: Endpoint de debug para verificar equipment ==========
+app.get('/api/debug/equipment', async (req, res) => {
+  try {
+    const equipmentCount = await Equipment.count();
+    const clientCount = await Client.count();
+    const equipment = await Equipment.findAll({
+      limit: 5,
+      include: [
+        {
+          model: Client,
+          as: 'client',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+    
+    res.json({
+      equipmentCount,
+      clientCount,
+      sampleEquipment: equipment,
+      message: 'Debug info for equipment'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
 });
 
 // ========== AGREGADO: Endpoint de debug para verificar productos ==========
@@ -130,5 +162,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🗄️  Database: MySQL`);
-  console.log(`🔧 Debug endpoint: http://localhost:${PORT}/api/debug/products`);
+  console.log(`🔧 Debug endpoints:`);
+  console.log(`   - Products: http://localhost:${PORT}/api/debug/products`);
+  console.log(`   - Equipment: http://localhost:${PORT}/api/debug/equipment`); // ← NUEVO
 });

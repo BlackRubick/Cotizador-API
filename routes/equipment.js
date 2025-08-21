@@ -1,54 +1,23 @@
-// routes/clients.js - ACTUALIZADO con rutas de equipment
+// routes/equipment.js
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 
 const {
-  getClients,
-  getClient,
-  createClient,
-  updateClient,
-  deleteClient,
-  getClientStats
-} = require('../controllers/clientController');
-
-// Importar controladores de equipment
-const {
   getClientEquipment,
-  createEquipment
+  getEquipment,
+  createEquipment,
+  updateEquipment,
+  deleteEquipment,
+  getEquipmentCategories,
+  getEquipmentBrands,
+  getEquipmentStats,
+  getMaintenanceAlerts
 } = require('../controllers/equipmentController');
 
 const { auth } = require('../middleware/auth');
 
-// Validation rules para clientes
-const clientValidation = [
-  body('name')
-    .notEmpty()
-    .withMessage('Client name is required')
-    .isLength({ max: 200 })
-    .withMessage('Name cannot exceed 200 characters'),
-  body('contact')
-    .notEmpty()
-    .withMessage('Contact person is required')
-    .isLength({ max: 100 })
-    .withMessage('Contact name cannot exceed 100 characters'),
-  body('email')
-    .isEmail()
-    .withMessage('Please enter a valid email')
-    .normalizeEmail(),
-  body('phone')
-    .notEmpty()
-    .withMessage('Phone is required'),
-  body('clientType')
-    .isIn(['Hospital', 'Clínica', 'Laboratorio', 'Centro Diagnóstico', 'Consultorio', 'Otro'])
-    .withMessage('Invalid client type'),
-  body('rfc')
-    .optional()
-    .matches(/^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/)
-    .withMessage('Please enter a valid RFC')
-];
-
-// Validation rules para equipment
+// Validation rules para crear/actualizar equipo
 const equipmentValidation = [
   body('name')
     .notEmpty()
@@ -137,19 +106,19 @@ const equipmentValidation = [
 // Apply auth middleware to all routes
 router.use(auth);
 
-// ========== RUTAS DE CLIENTES ==========
-router.get('/stats', getClientStats);
-router.get('/', getClients);
-router.get('/:id', getClient);
-router.post('/', clientValidation, createClient);
-router.put('/:id', clientValidation, updateClient);
-router.delete('/:id', deleteClient);
+// Rutas de utilidad (sin parámetros)
+router.get('/categories', getEquipmentCategories);
+router.get('/brands', getEquipmentBrands);
+router.get('/stats', getEquipmentStats);
+router.get('/maintenance-alerts', getMaintenanceAlerts);
 
-// ========== RUTAS DE EQUIPMENT POR CLIENTE ==========
-// Obtener todos los equipos de un cliente
-router.get('/:clientId/equipment', getClientEquipment);
+// Rutas específicas de equipo individual
+router.get('/:id', getEquipment);
+router.put('/:id', equipmentValidation, updateEquipment);
+router.delete('/:id', deleteEquipment);
 
-// Crear nuevo equipo para un cliente
-router.post('/:clientId/equipment', equipmentValidation, createEquipment);
+// Estas rutas van en clients.js pero las defino aquí para referencia
+// router.get('/clients/:clientId/equipment', getClientEquipment);
+// router.post('/clients/:clientId/equipment', equipmentValidation, createEquipment);
 
 module.exports = router;

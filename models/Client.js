@@ -1,3 +1,4 @@
+// models/Client.js - CORREGIDO para que createdBy sea opcional
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -82,7 +83,7 @@ const Client = sequelize.define('Client', {
   },
   createdBy: {
     type: DataTypes.INTEGER,
-    allowNull: true, // ← CAMBIO PRINCIPAL: de false a true
+    allowNull: true, // ← CORREGIDO: Ahora es opcional
     references: {
       model: 'users',
       key: 'id'

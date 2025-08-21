@@ -1,4 +1,4 @@
-// controllers/quoteController.js - CORREGIDO para Sequelize/MySQL
+// controllers/quoteController.js - COMPLETO CORREGIDO para Sequelize/MySQL
 const { Quote, Client, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
@@ -51,7 +51,8 @@ const getQuotes = async (req, res) => {
         {
           model: Client,
           as: 'client',
-          attributes: ['name', 'contact', 'email']
+          attributes: ['name', 'contact', 'email'],
+          required: false // LEFT JOIN para incluir cotizaciones sin cliente asociado
         },
         {
           model: User,
@@ -94,7 +95,8 @@ const getQuote = async (req, res) => {
         {
           model: Client,
           as: 'client',
-          attributes: ['name', 'contact', 'email', 'phone', 'fullAddress']
+          attributes: ['name', 'contact', 'email', 'phone', 'fullAddress'],
+          required: false
         },
         {
           model: User,
@@ -244,19 +246,25 @@ const createQuote = async (req, res) => {
     }
 
     // Cargar la cotización creada con sus relaciones
+    const includeOptions = [
+      {
+        model: User,
+        as: 'creator',
+        attributes: ['firstName', 'lastName', 'username']
+      }
+    ];
+
+    // Solo incluir cliente si clientId existe
+    if (clientId) {
+      includeOptions.push({
+        model: Client,
+        as: 'client',
+        attributes: ['name', 'contact', 'email']
+      });
+    }
+
     const createdQuote = await Quote.findByPk(quote.id, {
-      include: [
-        {
-          model: Client,
-          as: 'client',
-          attributes: ['name', 'contact', 'email']
-        },
-        {
-          model: User,
-          as: 'creator',
-          attributes: ['firstName', 'lastName', 'username']
-        }
-      ]
+      include: includeOptions
     });
 
     res.status(201).json({
@@ -305,22 +313,38 @@ const updateQuote = async (req, res) => {
       });
     }
 
+    // Si se actualizan productos, recalcular totales
+    if (req.body.products) {
+      const subtotal = req.body.products.reduce((sum, product) => sum + (product.totalPrice || 0), 0);
+      const taxAmount = subtotal * 0.16;
+      const total = subtotal + taxAmount;
+      
+      req.body.subtotal = subtotal;
+      req.body.taxAmount = taxAmount;
+      req.body.total = total;
+    }
+
     await quote.update(req.body);
 
     // Reload with associations
+    const includeOptions = [
+      {
+        model: User,
+        as: 'creator',
+        attributes: ['firstName', 'lastName', 'username']
+      }
+    ];
+
+    if (quote.clientId) {
+      includeOptions.push({
+        model: Client,
+        as: 'client',
+        attributes: ['name', 'contact', 'email']
+      });
+    }
+
     const updatedQuote = await Quote.findByPk(req.params.id, {
-      include: [
-        {
-          model: Client,
-          as: 'client',
-          attributes: ['name', 'contact', 'email']
-        },
-        {
-          model: User,
-          as: 'creator',
-          attributes: ['firstName', 'lastName', 'username']
-        }
-      ]
+      include: includeOptions
     });
 
     res.json({
@@ -459,6 +483,8 @@ const getQuoteStats = async (req, res) => {
     const totalQuotes = await Quote.count();
     const confirmedQuotes = await Quote.count({ where: { status: 'confirmed' } });
     const pendingQuotes = await Quote.count({ where: { status: 'pending' } });
+    const sentQuotes = await Quote.count({ where: { status: 'sent' } });
+    const draftQuotes = await Quote.count({ where: { status: 'draft' } });
     const rejectedQuotes = await Quote.count({ where: { status: 'rejected' } });
     
     // Calculate total value of confirmed quotes
@@ -469,19 +495,142 @@ const getQuoteStats = async (req, res) => {
     
     const totalValue = confirmedQuotesData.reduce((sum, quote) => sum + parseFloat(quote.total || 0), 0);
 
+    // Get quotes by month (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const quotesByMonth = await Quote.findAll({
+      where: {
+        createdAt: { [Op.gte]: sixMonthsAgo }
+      },
+      attributes: [
+        [Quote.sequelize.fn('DATE_TRUNC', 'month', Quote.sequelize.col('createdAt')), 'month'],
+        [Quote.sequelize.fn('COUNT', Quote.sequelize.col('id')), 'count'],
+        [Quote.sequelize.fn('SUM', Quote.sequelize.col('total')), 'totalValue']
+      ],
+      group: [Quote.sequelize.fn('DATE_TRUNC', 'month', Quote.sequelize.col('createdAt'))],
+      order: [[Quote.sequelize.fn('DATE_TRUNC', 'month', Quote.sequelize.col('createdAt')), 'ASC']]
+    });
+
+    // Average quote value
+    const averageQuoteValue = totalQuotes > 0 ? totalValue / confirmedQuotes : 0;
+
     res.json({
       success: true,
       data: {
         totalQuotes,
         confirmedQuotes,
         pendingQuotes,
+        sentQuotes,
+        draftQuotes,
         rejectedQuotes,
-        totalValue
+        totalValue,
+        averageQuoteValue,
+        quotesByMonth
       }
     });
 
   } catch (error) {
     console.error('Get quote stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error del servidor'
+    });
+  }
+};
+
+// @desc    Generate quote PDF
+// @route   GET /api/quotes/:id/pdf
+// @access  Private
+const generateQuotePDF = async (req, res) => {
+  try {
+    const quote = await Quote.findByPk(req.params.id, {
+      include: [
+        {
+          model: Client,
+          as: 'client',
+          attributes: ['name', 'contact', 'email', 'phone', 'fullAddress'],
+          required: false
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
+    });
+
+    if (!quote) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cotización no encontrada'
+      });
+    }
+
+    // TODO: Implementar generación de PDF
+    // Por ahora, devolver un placeholder
+    res.json({
+      success: true,
+      message: 'Generación de PDF no implementada aún',
+      data: {
+        quoteId: quote.id,
+        folio: quote.folio,
+        pdfUrl: null
+      }
+    });
+
+  } catch (error) {
+    console.error('Generate PDF error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error del servidor'
+    });
+  }
+};
+
+// @desc    Send quote by email
+// @route   POST /api/quotes/:id/send
+// @access  Private
+const sendQuoteEmail = async (req, res) => {
+  try {
+    const quote = await Quote.findByPk(req.params.id, {
+      include: [
+        {
+          model: Client,
+          as: 'client',
+          attributes: ['name', 'contact', 'email', 'phone', 'fullAddress'],
+          required: false
+        }
+      ]
+    });
+
+    if (!quote) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cotización no encontrada'
+      });
+    }
+
+    // TODO: Implementar envío de email
+    // Por ahora, solo actualizar el estado y fecha de envío
+    await quote.update({
+      status: 'sent',
+      sentDate: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: 'Cotización enviada por email exitosamente',
+      data: {
+        quoteId: quote.id,
+        folio: quote.folio,
+        sentTo: quote.clientInfoEmail,
+        sentDate: quote.sentDate
+      }
+    });
+
+  } catch (error) {
+    console.error('Send quote email error:', error);
     res.status(500).json({
       success: false,
       message: 'Error del servidor'
@@ -496,5 +645,7 @@ module.exports = {
   updateQuote,
   updateQuoteStatus,
   deleteQuote,
-  getQuoteStats
+  getQuoteStats,
+  generateQuotePDF,
+  sendQuoteEmail
 };

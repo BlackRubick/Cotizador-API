@@ -216,7 +216,6 @@ GET /api/products?search=monitor&category=64f7d123&minPrice=1000&maxPrice=20000&
 - `429` - Demasiadas solicitudes
 - `500` - Error interno del servidor
 
-## 🧪 Pruebas
 
 ```bash
 # Ejecutar pruebas
@@ -246,34 +245,7 @@ npm test          # Ejecutar pruebas
 
 ## 🚀 Despliegue
 
-### Variables de Entorno para Producción
 
-```env
-NODE_ENV=production
-PORT=5000
-MONGODB_URI=mongodb://usuario:password@host:puerto/base_datos
-JWT_SECRET=clave_super_secreta_para_produccion
-FRONTEND_URL=https://tu-dominio-frontend.com
-```
-
-### Con PM2
-```bash
-npm install -g pm2
-pm2 start server.js --name "cotizador-api"
-pm2 startup
-pm2 save
-```
-
-
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE.md](LICENSE.md) para detalles.
-
-## 📞 Soporte
-
-Para soporte técnico o preguntas:
-- Email: soporte@tuempresa.com
-- Teléfono: +52 961 123 4567
 
 ## 📋 TODO
 

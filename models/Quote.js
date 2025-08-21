@@ -1,3 +1,4 @@
+// models/Quote.js - CORREGIDO para clientId opcional
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -14,7 +15,7 @@ const Quote = sequelize.define('Quote', {
   },
   clientId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true, 
     references: {
       model: 'clients',
       key: 'id'

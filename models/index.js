@@ -7,7 +7,7 @@ const Product = require('./Product');
 const Category = require('./Category');
 const Client = require('./Client');
 const Quote = require('./Quote');
-const Equipment = require('./Equipment'); // ← NUEVO
+const Equipment = require('./Equipment'); 
 
 // Configurar solo las asociaciones que NO están en los modelos individuales
 // ========================================================================
@@ -17,7 +17,7 @@ User.hasMany(Product, { foreignKey: 'createdBy', as: 'products' });
 User.hasMany(Category, { foreignKey: 'createdBy', as: 'categories' });
 User.hasMany(Client, { foreignKey: 'createdBy', as: 'clients' });
 User.hasMany(Quote, { foreignKey: 'createdBy', as: 'quotes' });
-User.hasMany(Equipment, { foreignKey: 'createdBy', as: 'equipment' }); // ← NUEVO
+User.hasMany(Equipment, { foreignKey: 'createdBy', as: 'equipment' }); 
 
 // Product associations (estas NO están en Product.js)
 Product.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
@@ -31,7 +31,7 @@ Category.hasMany(Product, { foreignKey: 'categoryId', as: 'products' });
 // Client associations (estas NO están en Client.js)
 Client.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 Client.hasMany(Quote, { foreignKey: 'clientId', as: 'quotes' });
-Client.hasMany(Equipment, { foreignKey: 'clientId', as: 'equipment' }); // ← NUEVO
+Client.hasMany(Equipment, { foreignKey: 'clientId', as: 'equipment' }); 
 
 // Quote associations (estas NO están en Quote.js)
 Quote.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });

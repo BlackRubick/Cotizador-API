@@ -3,6 +3,35 @@ const { Quote, Client, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
+// Función helper para generar folio
+const generateFolio = async () => {
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  // Buscar el último folio del día
+  const lastQuote = await Quote.findOne({
+    where: {
+      folio: {
+        [Op.like]: `BHL${day}${month}${year}%`
+      }
+    },
+    order: [['folio', 'DESC']]
+  });
+  
+  let sequence = 1;
+  if (lastQuote) {
+    // Extraer el número de secuencia del último folio
+    const lastSequence = parseInt(lastQuote.folio.slice(-1));
+    if (!isNaN(lastSequence)) {
+      sequence = lastSequence + 1;
+    }
+  }
+  
+  return `BHL${day}${month}${year}C${sequence}`;
+};
+
 // @desc    Get all quotes
 // @route   GET /api/quotes
 // @access  Private
@@ -201,8 +230,13 @@ const createQuote = async (req, res) => {
     const taxAmount = subtotal * 0.16; // 16% IVA
     const total = subtotal + taxAmount;
 
+    // ========== GENERAR FOLIO AUTOMÁTICAMENTE ==========
+    const folio = await generateFolio();
+    console.log('📄 Generated folio:', folio);
+
     // Crear datos de la cotización
     const quoteData = {
+      folio: folio, // ← FOLIO GENERADO AUTOMÁTICAMENTE
       clientId: clientId || null,
       clientInfoName: clientName || client?.name || 'Cliente',
       clientInfoContact: clientContact || client?.contact || 'Contacto',
@@ -232,7 +266,7 @@ const createQuote = async (req, res) => {
     // Crear la cotización
     const quote = await Quote.create(quoteData);
 
-    console.log('✅ Quote created with ID:', quote.id);
+    console.log('✅ Quote created with ID:', quote.id, 'and folio:', quote.folio);
 
     // Actualizar estadísticas del cliente si existe
     if (clientId && client) {

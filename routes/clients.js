@@ -114,8 +114,7 @@ const clientValidation = [
 // ========== VALIDACIONES PARA ENCARGADOS ==========
 const encargadoValidation = [
   body('nombre')
-    .notEmpty()
-    .withMessage('Nombre del encargado es requerido')
+    .optional() // ← CAMBIADO: Ya no es requerido
     .isLength({ max: 100 })
     .withMessage('Nombre cannot exceed 100 characters'),
   body('cargo')

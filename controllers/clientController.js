@@ -208,53 +208,59 @@ const createClient = async (req, res) => {
 
     // ========== MANEJAR DATOS JSON DEL NOTES Y ENCARGADOS ==========
     if (notes && typeof notes === 'string') {
-      try {
-        const notesData = JSON.parse(notes);
+  try {
+    const notesData = JSON.parse(notes);
+    
+    // Extraer datos adicionales del notes JSON
+    processedData.hospitalName = processedData.hospitalName || notesData.hospital;
+    processedData.dependencia = processedData.dependencia || notesData.dependencia;
+    processedData.contrato = processedData.contrato || notesData.contrato;
+    processedData.equipmentName = processedData.equipmentName || notesData.equipo;
+    processedData.equipmentBrand = processedData.equipmentBrand || notesData.marca;
+    processedData.equipmentModel = processedData.equipmentModel || notesData.modelo;
+    processedData.serialNumber = processedData.serialNumber || notesData.numeroSerie;
+    processedData.installationDate = processedData.installationDate || notesData.fechaInstalacion;
+    processedData.lastMaintenance = processedData.lastMaintenance || notesData.ultimoMantenimiento;
+    processedData.statusApril2025 = processedData.statusApril2025 || notesData.estatusAbril2025;
+    processedData.statusStart2026 = processedData.statusStart2026 || notesData.estatusInicio26;
+    
+    // ========== CORREGIDO: Manejar encargados OPCIONALES ==========
+    if (notesData.encargados && Array.isArray(notesData.encargados) && notesData.encargados.length > 0) {
+      const encargadosValidos = notesData.encargados.filter(enc => 
+        enc.nombre && enc.nombre.trim() !== ''
+      );
+      
+      if (encargadosValidos.length > 0) {
+        // Usar el primer encargado como contacto principal
+        const encargadoPrincipal = encargadosValidos[0];
         
-        // Extraer datos adicionales del notes JSON
-        processedData.hospitalName = processedData.hospitalName || notesData.hospital;
-        processedData.dependencia = processedData.dependencia || notesData.dependencia;
-        processedData.contrato = processedData.contrato || notesData.contrato;
-        processedData.equipmentName = processedData.equipmentName || notesData.equipo;
-        processedData.equipmentBrand = processedData.equipmentBrand || notesData.marca;
-        processedData.equipmentModel = processedData.equipmentModel || notesData.modelo;
-        processedData.serialNumber = processedData.serialNumber || notesData.numeroSerie;
-        processedData.installationDate = processedData.installationDate || notesData.fechaInstalacion;
-        processedData.lastMaintenance = processedData.lastMaintenance || notesData.ultimoMantenimiento;
-        processedData.statusApril2025 = processedData.statusApril2025 || notesData.estatusAbril2025;
-        processedData.statusStart2026 = processedData.statusStart2026 || notesData.estatusInicio26;
+        processedData.contact = encargadoPrincipal.nombre.trim();
         
-        // ========== NUEVO: Manejar encargados ==========
-        if (notesData.encargados && Array.isArray(notesData.encargados)) {
-          const encargadosValidos = notesData.encargados.filter(enc => 
-            enc.nombre && enc.nombre.trim() !== ''
-          );
-          
-          if (encargadosValidos.length > 0) {
-            // Usar el primer encargado como contacto principal
-            const encargadoPrincipal = encargadosValidos[0];
-            
-            processedData.contact = encargadoPrincipal.nombre.trim();
-            
-            // Si el encargado tiene email, usarlo (si no, mantener el email enviado)
-            if (encargadoPrincipal.email && encargadoPrincipal.email.trim() !== '') {
-              processedData.email = encargadoPrincipal.email.toLowerCase().trim();
-            }
-            
-            // Si el encargado tiene teléfono, usarlo (si no, mantener el phone enviado)
-            if (encargadoPrincipal.telefono && encargadoPrincipal.telefono.trim() !== '') {
-              processedData.phone = encargadoPrincipal.telefono.trim();
-            }
-            
-            console.log(`👥 Procesando ${encargadosValidos.length} encargado(s) para cliente ${processedData.name}`);
-            console.log(`👤 Encargado principal: ${encargadoPrincipal.nombre} (${encargadoPrincipal.cargo || 'Sin cargo'})`);
-          }
+        // Si el encargado tiene email, usarlo (si no, mantener el email enviado)
+        if (encargadoPrincipal.email && encargadoPrincipal.email.trim() !== '') {
+          processedData.email = encargadoPrincipal.email.toLowerCase().trim();
         }
         
-      } catch (jsonError) {
-        console.warn('⚠️ Error parsing notes JSON:', jsonError);
+        // Si el encargado tiene teléfono, usarlo (si no, mantener el phone enviado)
+        if (encargadoPrincipal.telefono && encargadoPrincipal.telefono.trim() !== '') {
+          processedData.phone = encargadoPrincipal.telefono.trim();
+        }
+        
+        console.log(`👥 Procesando ${encargadosValidos.length} encargado(s) para cliente ${processedData.name}`);
+        console.log(`👤 Encargado principal: ${encargadoPrincipal.nombre} (${encargadoPrincipal.cargo || 'Sin cargo'})`);
+      } else {
+        console.log(`⚠️ No hay encargados válidos en el JSON. Usando datos básicos del cliente.`);
       }
+    } else {
+      console.log(`📝 No hay datos de encargados en el JSON. Usando datos básicos del cliente.`);
     }
+    
+  } catch (jsonError) {
+    console.warn('⚠️ Error parsing notes JSON:', jsonError);
+  }
+} else {
+  console.log(`📝 No hay campo notes. Usando solo datos básicos del cliente.`);
+}
 
     console.log('📋 Processed data for database:', processedData);
 

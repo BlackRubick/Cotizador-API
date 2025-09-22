@@ -1,6 +1,7 @@
 // scripts/createConduitUsers.js - Script para crear usuarios de Conduit Life
 const { User } = require('../models');
 const sequelize = require('../config/database');
+const { Op } = require('sequelize');
 require('dotenv').config();
 
 // Definir los usuarios a crear - TODOS CON ROL ADMIN
@@ -63,7 +64,7 @@ const createConduitUsers = async () => {
     await sequelize.authenticate();
     console.log('✅ Conectado a MySQL');
 
-    console.log('👥 Creando usuarios de Conduit Life...\n');
+    console.log('👥 Creando usuarios ADMINISTRADORES de Conduit Life...\n');
 
     const createdUsers = [];
     const existingUsers = [];
@@ -73,7 +74,7 @@ const createConduitUsers = async () => {
         // Verificar si el usuario ya existe por email o username
         const existingUser = await User.findOne({
           where: {
-            $or: [
+            [Op.or]: [
               { email: userData.email },
               { username: userData.username }
             ]
@@ -133,83 +134,6 @@ const createConduitUsers = async () => {
 
   } catch (error) {
     console.error('❌ Error en la operación:', error);
-    throw error;
-  } finally {
-    await sequelize.close();
-  }
-};
-
-// Función para crear un usuario individual
-const createSingleUser = async (userData) => {
-  try {
-    await sequelize.authenticate();
-    
-    const existingUser = await User.findOne({
-      where: {
-        $or: [
-          { email: userData.email },
-          { username: userData.username }
-        ]
-      }
-    });
-
-    if (existingUser) {
-      console.log(`⚠️  Usuario ya existe: ${userData.email}`);
-      return existingUser;
-    }
-
-    const newUser = await User.create({
-      ...userData,
-      isActive: true
-    });
-
-    console.log(`✅ Usuario creado: ${userData.email}`);
-    return newUser;
-
-  } catch (error) {
-    console.error(`❌ Error creando usuario:`, error);
-    throw error;
-  }
-};
-
-// Función para listar usuarios de Conduit Life
-const listConduitUsers = async () => {
-  try {
-    await sequelize.authenticate();
-    
-    const users = await User.findAll({
-      where: {
-        email: {
-          $like: '%@conduitlife.mx'
-        }
-      },
-      attributes: ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'position', 'isActive', 'createdAt']
-    });
-
-    console.log('\n👥 USUARIOS DE CONDUIT LIFE:');
-    console.log('================================================');
-    
-    if (users.length === 0) {
-      console.log('No se encontraron usuarios de Conduit Life');
-      return [];
-    }
-
-    users.forEach(user => {
-      console.log(`👤 ${user.firstName} ${user.lastName}`);
-      console.log(`   ID: ${user.id}`);
-      console.log(`   Email: ${user.email}`);
-      console.log(`   Username: ${user.username}`);
-      console.log(`   Role: ${user.role}`);
-      console.log(`   Position: ${user.position}`);
-      console.log(`   Active: ${user.isActive ? '✅' : '❌'}`);
-      console.log(`   Created: ${user.createdAt.toLocaleDateString()}`);
-      console.log('   ----------------------------------------');
-    });
-
-    return users;
-
-  } catch (error) {
-    console.error('❌ Error listando usuarios:', error);
     throw error;
   } finally {
     await sequelize.close();

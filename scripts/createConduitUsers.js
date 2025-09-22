@@ -7,7 +7,7 @@ require('dotenv').config();
 // Definir los usuarios a crear - TODOS CON ROL ADMIN
 const usersToCreate = [
   {
-    username: 'especialista.producto',
+    username: 'especialistaproducto',
     email: 'especialista.producto@conduitlife.mx',
     firstName: 'Especialista',
     lastName: 'Producto',
@@ -17,7 +17,7 @@ const usersToCreate = [
     password: 'Conduit2024!' // Cambiar en producción
   },
   {
-    username: 'alfonso.romero',
+    username: 'alfonsoromero',
     email: 'alfonso.romero@conduitlife.mx',
     firstName: 'Alfonso',
     lastName: 'Romero',
@@ -27,7 +27,7 @@ const usersToCreate = [
     password: 'Conduit2024!' // Cambiar en producción
   },
   {
-    username: 'jose.navarrete',
+    username: 'josenavarrete',
     email: 'Jose.navarrete@conduitlife.mx',
     firstName: 'José',
     lastName: 'Navarrete',
@@ -47,7 +47,7 @@ const usersToCreate = [
     password: 'Conduit2024!' // Cambiar en producción
   },
   {
-    username: 'eduardo.navarrete',
+    username: 'eduardonavarrete',
     email: 'eduardo.navarrete@conduitlife.mx',
     firstName: 'Eduardo',
     lastName: 'Navarrete',

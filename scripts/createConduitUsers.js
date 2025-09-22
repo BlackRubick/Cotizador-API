@@ -140,6 +140,83 @@ const createConduitUsers = async () => {
   }
 };
 
+// Función para crear un usuario individual
+const createSingleUser = async (userData) => {
+  try {
+    await sequelize.authenticate();
+    
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { email: userData.email },
+          { username: userData.username }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      console.log(`⚠️  Usuario ya existe: ${userData.email}`);
+      return existingUser;
+    }
+
+    const newUser = await User.create({
+      ...userData,
+      isActive: true
+    });
+
+    console.log(`✅ Usuario creado: ${userData.email}`);
+    return newUser;
+
+  } catch (error) {
+    console.error(`❌ Error creando usuario:`, error);
+    throw error;
+  }
+};
+
+// Función para listar usuarios de Conduit Life
+const listConduitUsers = async () => {
+  try {
+    await sequelize.authenticate();
+    
+    const users = await User.findAll({
+      where: {
+        email: {
+          [Op.like]: '%@conduitlife.mx'
+        }
+      },
+      attributes: ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'position', 'isActive', 'createdAt']
+    });
+
+    console.log('\n👥 USUARIOS DE CONDUIT LIFE:');
+    console.log('================================================');
+    
+    if (users.length === 0) {
+      console.log('No se encontraron usuarios de Conduit Life');
+      return [];
+    }
+
+    users.forEach(user => {
+      console.log(`👤 ${user.firstName} ${user.lastName}`);
+      console.log(`   ID: ${user.id}`);
+      console.log(`   Email: ${user.email}`);
+      console.log(`   Username: ${user.username}`);
+      console.log(`   Role: ${user.role}`);
+      console.log(`   Position: ${user.position}`);
+      console.log(`   Active: ${user.isActive ? '✅' : '❌'}`);
+      console.log(`   Created: ${user.createdAt.toLocaleDateString()}`);
+      console.log('   ----------------------------------------');
+    });
+
+    return users;
+
+  } catch (error) {
+    console.error('❌ Error listando usuarios:', error);
+    throw error;
+  } finally {
+    await sequelize.close();
+  }
+};
+
 // Ejecutar si se llama directamente
 if (require.main === module) {
   const args = process.argv.slice(2);
@@ -168,7 +245,7 @@ if (require.main === module) {
 }
 
 module.exports = { 
-   createAdminUser, 
+  createConduitUsers, 
   createSingleUser, 
   listConduitUsers, 
   usersToCreate 

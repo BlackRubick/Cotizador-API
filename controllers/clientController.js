@@ -1,4 +1,3 @@
-// controllers/clientController.js
 const { Client } = require('../models');
 const { Op } = require('sequelize');
 
@@ -12,9 +11,17 @@ const getClients = async (req, res) => {
     
     if (search) {
       where[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { contact: { [Op.iLike]: `%${search}%` } },
-        { email: { [Op.iLike]: `%${search}%` } }
+        { name: { [Op.like]: `%${search}%` } },
+        { contact: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+        { hospitalName: { [Op.like]: `%${search}%` } },
+        { dependencia: { [Op.like]: `%${search}%` } },
+        { equipmentName: { [Op.like]: `%${search}%` } },
+        { equipmentBrand: { [Op.like]: `%${search}%` } },
+        { equipmentModel: { [Op.like]: `%${search}%` } },
+        { serialNumber: { [Op.like]: `%${search}%` } },
+        { city: { [Op.like]: `%${search}%` } },
+        { state: { [Op.like]: `%${search}%` } }
       ];
     }
     
@@ -26,10 +33,10 @@ const getClients = async (req, res) => {
       where.status = status;
     }
 
-    // Calcular offset para paginación manual
+    // Calcular offset para paginación
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Obtener clientes con paginación manual
+    // Obtener clientes con paginación
     const { count, rows } = await Client.findAndCountAll({
       where,
       limit: parseInt(limit),
@@ -71,7 +78,14 @@ const getClient = async (req, res) => {
     const { id } = req.params;
     
     const client = await Client.findByPk(id, {
-      attributes: { exclude: ['deletedAt'] }
+      attributes: { exclude: ['deletedAt'] },
+      include: [
+        {
+          model: require('../models').User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'username']
+        }
+      ]
     });
     
     if (!client) {
@@ -98,6 +112,8 @@ const getClient = async (req, res) => {
 // Crear nuevo cliente
 const createClient = async (req, res) => {
   try {
+    console.log('📝 Creating client with data:', req.body);
+    
     const {
       name,
       contact,
@@ -110,14 +126,33 @@ const createClient = async (req, res) => {
       country,
       rfc,
       clientType,
-      notes
+      notes,
+      
+      // ========== CAMPOS ESPECÍFICOS DE HOSPITAL ==========
+      hospitalName,
+      dependencia,
+      contrato,
+      
+      // ========== INFORMACIÓN DE EQUIPO ==========
+      equipmentName,
+      equipmentBrand, 
+      equipmentModel,
+      serialNumber,
+      
+      // ========== FECHAS ==========
+      installationDate,
+      lastMaintenance,
+      
+      // ========== ESTATUS ==========
+      statusApril2025,
+      statusStart2026
     } = req.body;
 
     // Validaciones básicas
     if (!name || !contact || !email || !phone) {
       return res.status(400).json({
         success: false,
-        message: 'Los campos nombre, contacto, email y teléfono son requeridos'
+        message: 'Los campos name, contact, email y phone son requeridos'
       });
     }
 
@@ -133,37 +168,82 @@ const createClient = async (req, res) => {
       });
     }
 
-    // Crear dirección completa
-    const fullAddress = [street, city, state, zipCode, country]
-      .filter(Boolean)
-      .join(', ');
-
-    // Crear cliente - IMPORTANTE: incluir createdBy del usuario autenticado
-    const client = await Client.create({
-      name,
-      contact,
-      email: email.toLowerCase(),
-      phone,
-      street,
-      city,
-      state,
-      zipCode,
-      country,
-      fullAddress,
-      rfc,
+    // ========== PROCESAR DATOS DEL FRONTEND ==========
+    let processedData = {
+      name: name.trim(),
+      contact: contact.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone.trim(),
+      street: street?.trim(),
+      city: city?.trim(),
+      state: state?.trim(),
+      zipCode: zipCode?.trim(),
+      country: country || 'México',
+      rfc: rfc?.trim(),
       clientType: clientType || 'Hospital',
-      notes,
+      notes: notes,
+      
+      // Campos específicos
+      hospitalName: hospitalName?.trim(),
+      dependencia: dependencia?.trim(),
+      contrato: contrato?.trim(),
+      
+      // Información de equipo
+      equipmentName: equipmentName?.trim(),
+      equipmentBrand: equipmentBrand?.trim(),
+      equipmentModel: equipmentModel?.trim(),
+      serialNumber: serialNumber?.trim(),
+      
+      // Fechas
+      installationDate: installationDate || null,
+      lastMaintenance: lastMaintenance || null,
+      
+      // Estatus
+      statusApril2025: statusApril2025?.trim(),
+      statusStart2026: statusStart2026?.trim(),
+      
       status: 'active',
-      createdBy: req.user.id // ESTO ES LO QUE FALTABA - ID del usuario autenticado
-    });
+      createdBy: req.user?.id || 1 
+    };
+
+    // ========== MANEJAR DATOS JSON DEL NOTES ==========
+    if (notes && typeof notes === 'string') {
+      try {
+        const notesData = JSON.parse(notes);
+        
+        // Extraer datos adicionales del notes JSON
+        processedData.hospitalName = processedData.hospitalName || notesData.hospital;
+        processedData.dependencia = processedData.dependencia || notesData.dependencia;
+        processedData.contrato = processedData.contrato || notesData.contrato;
+        processedData.equipmentName = processedData.equipmentName || notesData.equipo;
+        processedData.equipmentBrand = processedData.equipmentBrand || notesData.marca;
+        processedData.equipmentModel = processedData.equipmentModel || notesData.modelo;
+        processedData.serialNumber = processedData.serialNumber || notesData.numeroSerie;
+        processedData.installationDate = processedData.installationDate || notesData.fechaInstalacion;
+        processedData.lastMaintenance = processedData.lastMaintenance || notesData.ultimoMantenimiento;
+        processedData.statusApril2025 = processedData.statusApril2025 || notesData.estatusAbril2025;
+        processedData.statusStart2026 = processedData.statusStart2026 || notesData.estatusInicio26;
+        
+      } catch (jsonError) {
+        console.warn('⚠️ Error parsing notes JSON:', jsonError);
+      }
+    }
+
+    console.log('📋 Processed data for database:', processedData);
+
+    // Crear cliente
+    const client = await Client.create(processedData);
+
+    console.log('✅ Client created successfully:', client.id);
 
     res.status(201).json({
       success: true,
       data: client,
       message: 'Cliente creado exitosamente'
     });
+    
   } catch (error) {
-    console.error('Create client error:', error);
+    console.error('❌ Create client error:', error);
     
     // Manejar errores de validación de Sequelize
     if (error.name === 'SequelizeValidationError') {
@@ -171,6 +251,13 @@ const createClient = async (req, res) => {
         success: false,
         message: 'Error de validación',
         errors: error.errors.map(err => err.message)
+      });
+    }
+    
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe un cliente con esos datos únicos (email, etc.)'
       });
     }
     
@@ -186,21 +273,7 @@ const createClient = async (req, res) => {
 const updateClient = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      name,
-      contact,
-      email,
-      phone,
-      street,
-      city,
-      state,
-      zipCode,
-      country,
-      rfc,
-      clientType,
-      notes,
-      status
-    } = req.body;
+    const updateData = req.body;
 
     const client = await Client.findByPk(id);
     
@@ -212,10 +285,10 @@ const updateClient = async (req, res) => {
     }
 
     // Verificar email único (excluyendo el cliente actual)
-    if (email && email.toLowerCase() !== client.email) {
+    if (updateData.email && updateData.email.toLowerCase() !== client.email) {
       const existingClient = await Client.findOne({
         where: { 
-          email: email.toLowerCase(),
+          email: updateData.email.toLowerCase(),
           id: { [Op.not]: id }
         }
       });
@@ -228,35 +301,30 @@ const updateClient = async (req, res) => {
       }
     }
 
-    // Crear dirección completa si se proporcionan los campos
-    let fullAddress = client.fullAddress;
-    if (street || city || state || zipCode || country) {
-      fullAddress = [
-        street || client.street,
-        city || client.city,
-        state || client.state,
-        zipCode || client.zipCode,
-        country || client.country
-      ].filter(Boolean).join(', ');
+    // Procesar datos JSON del notes si existe
+    if (updateData.notes && typeof updateData.notes === 'string') {
+      try {
+        const notesData = JSON.parse(updateData.notes);
+        
+        updateData.hospitalName = updateData.hospitalName || notesData.hospital;
+        updateData.dependencia = updateData.dependencia || notesData.dependencia;
+        updateData.contrato = updateData.contrato || notesData.contrato;
+        updateData.equipmentName = updateData.equipmentName || notesData.equipo;
+        updateData.equipmentBrand = updateData.equipmentBrand || notesData.marca;
+        updateData.equipmentModel = updateData.equipmentModel || notesData.modelo;
+        updateData.serialNumber = updateData.serialNumber || notesData.numeroSerie;
+        updateData.installationDate = updateData.installationDate || notesData.fechaInstalacion;
+        updateData.lastMaintenance = updateData.lastMaintenance || notesData.ultimoMantenimiento;
+        updateData.statusApril2025 = updateData.statusApril2025 || notesData.estatusAbril2025;
+        updateData.statusStart2026 = updateData.statusStart2026 || notesData.estatusInicio26;
+        
+      } catch (jsonError) {
+        console.warn('⚠️ Error parsing notes JSON:', jsonError);
+      }
     }
 
     // Actualizar cliente
-    await client.update({
-      name: name || client.name,
-      contact: contact || client.contact,
-      email: email ? email.toLowerCase() : client.email,
-      phone: phone || client.phone,
-      street: street || client.street,
-      city: city || client.city,
-      state: state || client.state,
-      zipCode: zipCode || client.zipCode,
-      country: country || client.country,
-      fullAddress,
-      rfc: rfc || client.rfc,
-      clientType: clientType || client.clientType,
-      notes: notes !== undefined ? notes : client.notes,
-      status: status || client.status
-    });
+    await client.update(updateData);
 
     res.status(200).json({
       success: true,
@@ -329,13 +397,27 @@ const getClientStats = async (req, res) => {
       group: ['clientType']
     });
 
+    // Contar por estado
+    const clientsByState = await Client.findAll({
+      attributes: [
+        'state',
+        [Client.sequelize.fn('COUNT', Client.sequelize.col('id')), 'count']
+      ],
+      group: ['state'],
+      where: {
+        state: { [Op.not]: null }
+      },
+      limit: 10
+    });
+
     res.status(200).json({
       success: true,
       data: {
         total: totalClients,
         active: activeClients,
         inactive: inactiveClients,
-        byType: clientsByType
+        byType: clientsByType,
+        byState: clientsByState
       }
     });
   } catch (error) {

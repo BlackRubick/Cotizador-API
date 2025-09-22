@@ -1,4 +1,3 @@
-// models/Product.js - CORREGIDO con categoryId y relaciones apropiadas
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -251,8 +250,8 @@ const Product = sequelize.define('Product', {
     { fields: ['item'] },
     { fields: ['proveedor'] },
     { fields: ['almacen'] },
-    { fields: ['factory_price'] }, // ← CORREGIDO: usar el nombre de campo real
-    { fields: ['precio_venta_paquete'] }, // ← CORREGIDO: usar el nombre de campo real
+    { fields: ['factory_price'] },
+    { fields: ['precio_venta_paquete'] },
     { fields: ['createdAt'] }
   ],
   hooks: {
@@ -260,6 +259,26 @@ const Product = sequelize.define('Product', {
       // Ensure code is uppercase and trimmed
       if (product.code) {
         product.code = product.code.toString().toUpperCase().trim();
+      }
+      
+      // ========== AGREGADO: Corregir códigos de moneda inválidos ==========
+      if (product.moneda) {
+        const currencyMap = {
+          'MX': 'MXN',
+          'US': 'USD', 
+          'EU': 'EUR',
+          'mx': 'MXN',
+          'us': 'USD',
+          'eu': 'EUR'
+        };
+        
+        if (currencyMap[product.moneda]) {
+          product.moneda = currencyMap[product.moneda];
+          console.log(`🔄 Corrected currency from ${product.moneda} to ${currencyMap[product.moneda]} for product ${product.code}`);
+        } else if (!product.moneda || product.moneda.length !== 3) {
+          console.log(`🔄 Invalid currency ${product.moneda} set to MXN for product ${product.code}`);
+          product.moneda = 'MXN';
+        }
       }
       
       // Calcular precio unitario si no está definido
@@ -275,21 +294,81 @@ const Product = sequelize.define('Product', {
   }
 });
 
-// Instance methods (mantenidos iguales)
+// ========== CORREGIDO: Instance methods con validación de moneda ==========
 Product.prototype.getFormattedPrice = function() {
-  const price = this.precioVentaPaquete || 0;
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: this.moneda || 'MXN'
-  }).format(price);
+  try {
+    // Validar y corregir código de moneda
+    let currency = this.moneda || 'MXN';
+    
+    // Mapear códigos de moneda inválidos a válidos
+    const currencyMap = {
+      'MX': 'MXN',
+      'US': 'USD', 
+      'EU': 'EUR',
+      'mx': 'MXN',
+      'us': 'USD',
+      'eu': 'EUR'
+    };
+    
+    // Corregir si es un código inválido
+    if (currencyMap[currency]) {
+      currency = currencyMap[currency];
+    }
+    
+    // Validar que sea un código válido (3 caracteres)
+    if (!currency || currency.length !== 3) {
+      currency = 'MXN'; // Fallback por defecto
+    }
+    
+    const price = this.precioVentaPaquete || 0;
+    
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: currency
+    }).format(price);
+    
+  } catch (error) {
+    console.warn('⚠️ Error formatting price for product', this.code, '- Currency:', this.moneda, 'Error:', error.message);
+    // Fallback seguro
+    const price = this.precioVentaPaquete || 0;
+    return `$${price.toFixed(2)} MXN`;
+  }
 };
 
 Product.prototype.getFormattedUnitPrice = function() {
-  const price = this.precioUnitario || (this.precioVentaPaquete / (this.cantidadPaquete || 1));
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: this.moneda || 'MXN'
-  }).format(price);
+  try {
+    // Misma validación para precio unitario
+    let currency = this.moneda || 'MXN';
+    
+    const currencyMap = {
+      'MX': 'MXN',
+      'US': 'USD', 
+      'EU': 'EUR',
+      'mx': 'MXN',
+      'us': 'USD',
+      'eu': 'EUR'
+    };
+    
+    if (currencyMap[currency]) {
+      currency = currencyMap[currency];
+    }
+    
+    if (!currency || currency.length !== 3) {
+      currency = 'MXN';
+    }
+    
+    const price = this.precioUnitario || (this.precioVentaPaquete / (this.cantidadPaquete || 1));
+    
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: currency
+    }).format(price);
+    
+  } catch (error) {
+    console.warn('⚠️ Error formatting unit price for product', this.code, '- Currency:', this.moneda);
+    const price = this.precioUnitario || (this.precioVentaPaquete / (this.cantidadPaquete || 1));
+    return `$${price.toFixed(2)} MXN`;
+  }
 };
 
 Product.prototype.isExpired = function() {
@@ -340,7 +419,7 @@ Product.searchByText = function(searchTerm) {
   });
 };
 
-// Remove sensitive data from JSON output and add calculated fields
+// ========== CORREGIDO: toJSON con manejo seguro de errores ==========
 Product.prototype.toJSON = function() {
   const product = { ...this.get() };
   delete product.deletedAt;
@@ -352,28 +431,39 @@ Product.prototype.toJSON = function() {
   product.basePrice = product.precioVentaPaquete || product.precioUnitario || 0;
   
   // ========== CORREGIDO: category y categoryName ==========
-  // Si hay categoryId, usar el nombre de la categoría asociada
   if (this.category) {
     product.category = this.category.name;
     product.categoryName = this.category.name;
   } else {
-    // Fallback usando los campos de servicio/especialidad
     product.category = product.servicio || 'General';
     product.categoryName = product.especialidad || product.servicio || 'General';
   }
   
   product.compatibility = [product.clasificacion].filter(Boolean);
   
-  // Add calculated fields
-  product.formattedPrice = this.getFormattedPrice();
-  product.formattedUnitPrice = this.getFormattedUnitPrice();
+  // ========== CORREGIDO: Add calculated fields con manejo de errores ==========
+  try {
+    product.formattedPrice = this.getFormattedPrice();
+  } catch (error) {
+    console.warn('⚠️ Error in formattedPrice for product', this.code);
+    product.formattedPrice = `$${product.basePrice || 0} MXN`;
+  }
+  
+  try {
+    product.formattedUnitPrice = this.getFormattedUnitPrice();
+  } catch (error) {
+    console.warn('⚠️ Error in formattedUnitPrice for product', this.code);
+    const unitPrice = product.precioUnitario || (product.basePrice / (product.cantidadPaquete || 1));
+    product.formattedUnitPrice = `$${unitPrice.toFixed(2)} MXN`;
+  }
+  
   product.finalPrice = this.calculateFinalPrice();
   product.isExpired = this.isExpired();
   product.isNearExpiry = this.isNearExpiry();
   
   // Stock info (dummy for now)
   product.stock = {
-    quantity: 100, // Podrías agregar este campo si lo necesitas
+    quantity: 100,
     minStock: 10,
     location: product.almacen,
     isInStock: true,
@@ -381,6 +471,21 @@ Product.prototype.toJSON = function() {
   };
   
   return product;
+};
+
+// ========== AGREGADO: Associations ==========
+Product.associate = (models) => {
+  // Relación con User (creador)
+  Product.belongsTo(models.User, {
+    foreignKey: 'createdBy',
+    as: 'creator'
+  });
+  
+  // Relación con Category
+  Product.belongsTo(models.Category, {
+    foreignKey: 'categoryId',
+    as: 'category'
+  });
 };
 
 module.exports = Product;

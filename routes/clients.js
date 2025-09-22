@@ -1,4 +1,3 @@
-// routes/clients.js - ACTUALIZADO con rutas de equipment
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
@@ -12,15 +11,10 @@ const {
   getClientStats
 } = require('../controllers/clientController');
 
-// Importar controladores de equipment
-const {
-  getClientEquipment,
-  createEquipment
-} = require('../controllers/equipmentController');
+// ========== TEMPORAL: Comentar middleware de autenticación ==========
+// const { protect } = require('../middleware/auth');
 
-const { auth } = require('../middleware/auth');
-
-// Validation rules para clientes
+// ========== VALIDACIONES ACTUALIZADAS PARA LOS NUEVOS CAMPOS ==========
 const clientValidation = [
   body('name')
     .notEmpty()
@@ -40,102 +34,69 @@ const clientValidation = [
     .notEmpty()
     .withMessage('Phone is required'),
   body('clientType')
+    .optional()
     .isIn(['Hospital', 'Clínica', 'Laboratorio', 'Centro Diagnóstico', 'Consultorio', 'Otro'])
     .withMessage('Invalid client type'),
   body('rfc')
     .optional()
     .matches(/^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/)
-    .withMessage('Please enter a valid RFC')
-];
-
-// Validation rules para equipment
-const equipmentValidation = [
-  body('name')
-    .notEmpty()
-    .withMessage('Nombre del equipo es requerido')
+    .withMessage('Please enter a valid RFC'),
+    
+  // ========== CAMPOS ESPECÍFICOS DE HOSPITAL ==========
+  body('hospitalName')
+    .optional()
     .isLength({ max: 200 })
-    .withMessage('Nombre no puede exceder 200 caracteres'),
-  body('model')
-    .notEmpty()
-    .withMessage('Modelo es requerido')
+    .withMessage('Hospital name cannot exceed 200 characters'),
+  body('dependencia')
+    .optional()
+    .isLength({ max: 200 })
+    .withMessage('Dependencia cannot exceed 200 characters'),
+  body('contrato')
+    .optional()
     .isLength({ max: 100 })
-    .withMessage('Modelo no puede exceder 100 caracteres'),
+    .withMessage('Contrato cannot exceed 100 characters'),
+    
+  // ========== INFORMACIÓN DE EQUIPO ==========
+  body('equipmentName')
+    .optional()
+    .isLength({ max: 200 })
+    .withMessage('Equipment name cannot exceed 200 characters'),
+  body('equipmentBrand')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('Equipment brand cannot exceed 100 characters'),
+  body('equipmentModel')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('Equipment model cannot exceed 100 characters'),
   body('serialNumber')
-    .notEmpty()
-    .withMessage('Número de serie es requerido')
+    .optional()
     .isLength({ max: 100 })
-    .withMessage('Número de serie no puede exceder 100 caracteres'),
-  body('category')
-    .isIn([
-      'Monitoreo',
-      'Emergencia',
-      'Ventilación',
-      'Diagnóstico',
-      'Laboratorio',
-      'Cirugía',
-      'Radiología',
-      'Rehabilitación',
-      'Anestesia',
-      'Neonatología',
-      'Cardiología',
-      'Neurología',
-      'Otro'
-    ])
-    .withMessage('Categoría inválida'),
-  body('brand')
-    .notEmpty()
-    .withMessage('Marca es requerida')
-    .isLength({ max: 100 })
-    .withMessage('Marca no puede exceder 100 caracteres'),
-  body('location')
-    .notEmpty()
-    .withMessage('Ubicación es requerida')
-    .isLength({ max: 200 })
-    .withMessage('Ubicación no puede exceder 200 caracteres'),
-  body('status')
-    .optional()
-    .isIn(['active', 'maintenance', 'out_of_service', 'retired'])
-    .withMessage('Estado inválido'),
-  body('installDate')
+    .withMessage('Serial number cannot exceed 100 characters'),
+    
+  // ========== FECHAS ==========
+  body('installationDate')
     .optional()
     .isISO8601()
-    .withMessage('Fecha de instalación debe ser una fecha válida'),
-  body('purchaseDate')
-    .optional()
-    .isISO8601()
-    .withMessage('Fecha de compra debe ser una fecha válida'),
-  body('warrantyExpiry')
-    .optional()
-    .isISO8601()
-    .withMessage('Fecha de vencimiento de garantía debe ser una fecha válida'),
+    .withMessage('Installation date must be a valid date'),
   body('lastMaintenance')
     .optional()
     .isISO8601()
-    .withMessage('Fecha de último mantenimiento debe ser una fecha válida'),
-  body('maintenanceInterval')
+    .withMessage('Last maintenance date must be a valid date'),
+    
+  // ========== ESTATUS ==========
+  body('statusApril2025')
     .optional()
-    .isInt({ min: 1, max: 60 })
-    .withMessage('Intervalo de mantenimiento debe ser entre 1 y 60 meses'),
-  body('cost')
+    .isLength({ max: 100 })
+    .withMessage('Status April 2025 cannot exceed 100 characters'),
+  body('statusStart2026')
     .optional()
-    .isFloat({ min: 0 })
-    .withMessage('Costo debe ser un número positivo'),
-  body('currency')
-    .optional()
-    .isIn(['MXN', 'USD', 'EUR'])
-    .withMessage('Moneda inválida'),
-  body('specifications')
-    .optional()
-    .isArray()
-    .withMessage('Especificaciones debe ser un array'),
-  body('supplier')
-    .optional()
-    .isLength({ max: 200 })
-    .withMessage('Proveedor no puede exceder 200 caracteres')
+    .isLength({ max: 100 })
+    .withMessage('Status start 2026 cannot exceed 100 characters')
 ];
 
-// Apply auth middleware to all routes
-router.use(auth);
+// ========== TEMPORAL: Sin middleware de autenticación ==========
+// router.use(protect);
 
 // ========== RUTAS DE CLIENTES ==========
 router.get('/stats', getClientStats);
@@ -144,12 +105,5 @@ router.get('/:id', getClient);
 router.post('/', clientValidation, createClient);
 router.put('/:id', clientValidation, updateClient);
 router.delete('/:id', deleteClient);
-
-// ========== RUTAS DE EQUIPMENT POR CLIENTE ==========
-// Obtener todos los equipos de un cliente
-router.get('/:clientId/equipment', getClientEquipment);
-
-// Crear nuevo equipo para un cliente
-router.post('/:clientId/equipment', equipmentValidation, createEquipment);
 
 module.exports = router;

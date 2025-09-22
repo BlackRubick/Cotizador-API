@@ -9,7 +9,7 @@ const sequelize = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 
 // ========== CORREGIDO: Import models to initialize associations ==========
-const { User, Product, Category, Client, Quote, Equipment } = require('./models'); // ← AGREGADO Equipment
+const { User, Product, Category, Client, Quote, Equipment } = require('./models'); 
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -18,151 +18,118 @@ const clientRoutes = require('./routes/clients');
 const quoteRoutes = require('./routes/quotes');
 const productRoutes = require('./routes/products');
 const categoryRoutes = require('./routes/categories');
-const equipmentRoutes = require('./routes/equipment'); // ← NUEVO
+const equipmentRoutes = require('./routes/equipment'); 
+const bulkRoutes = require('./routes/bulk');
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// ========== CORREGIDO: Configurar CORS ANTES de otras configuraciones ==========
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With', 
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cache-Control',
+    'Pragma'
+  ]
+};
+
+app.use(cors(corsOptions));
+
+// Security middleware (DESPUÉS de CORS)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Request logging
+app.use(morgan('combined'));
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  max: 1000, // limit each IP to 1000 requests per windowMs
+  message: 'Too many requests from this IP'
 });
 app.use(limiter);
 
-// Middleware
-app.use(morgan('combined'));
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
+// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Database connection and sync
-const connectDB = async () => {
-  try {
-    await sequelize.authenticate();
-    console.log('✅ MySQL connected successfully');
-    
-    // ========== CORREGIDO: Verificar que las asociaciones están configuradas ==========
-    console.log('📋 Models loaded:', Object.keys(sequelize.models));
-    
-    // Sync database (create tables if they don't exist)
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('📊 Database synchronized');
-    }
-  } catch (error) {
-    console.error('❌ MySQL connection error:', error);
-    process.exit(1);
-  }
-};
+// ========== AGREGADO: Middleware para manejar preflight requests ==========
+app.options('*', cors(corsOptions));
 
-connectDB();
+// ========== AGREGADO: Middleware para logging de requests ==========
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - Origin: ${req.get('Origin')}`);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/clients', clientRoutes); // ← Ya incluye rutas de equipment por cliente
+app.use('/api/clients', clientRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/equipment', equipmentRoutes); // ← NUEVO: rutas individuales de equipment
+app.use('/api/equipment', equipmentRoutes);
+app.use('/api/bulk', bulkRoutes);
 
-// Health check
+// Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'OK',
+  res.json({ 
+    status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    database: 'MySQL',
-    models: Object.keys(sequelize.models), // ← AGREGADO: para debug
-    environment: process.env.NODE_ENV || 'development'
+    cors: 'enabled'
   });
 });
 
-// ========== AGREGADO: Endpoint de debug para verificar equipment ==========
-app.get('/api/debug/equipment', async (req, res) => {
-  try {
-    const equipmentCount = await Equipment.count();
-    const clientCount = await Client.count();
-    const equipment = await Equipment.findAll({
-      limit: 5,
-      include: [
-        {
-          model: Client,
-          as: 'client',
-          attributes: ['id', 'name']
-        }
-      ]
-    });
-    
-    res.json({
-      equipmentCount,
-      clientCount,
-      sampleEquipment: equipment,
-      message: 'Debug info for equipment'
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
-
-// ========== AGREGADO: Endpoint de debug para verificar productos ==========
-app.get('/api/debug/products', async (req, res) => {
-  try {
-    const productCount = await Product.count();
-    const categoryCount = await Category.count();
-    const products = await Product.findAll({
-      limit: 5,
-      include: [
-        {
-          model: Category,
-          as: 'category',
-          attributes: ['id', 'name']
-        }
-      ]
-    });
-    
-    res.json({
-      productCount,
-      categoryCount,
-      sampleProducts: products,
-      message: 'Debug info for products'
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
-
-// Error handling middleware
+// Error handling middleware (debe ir al final)
 app.use(errorHandler);
 
-// 404 handler
+// Handle 404
 app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
+  res.status(404).json({ 
+    success: false, 
+    message: `Route ${req.originalUrl} not found` 
   });
 });
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🗄️  Database: MySQL`);
-  console.log(`🔧 Debug endpoints:`);
-  console.log(`   - Products: http://localhost:${PORT}/api/debug/products`);
-  console.log(`   - Equipment: http://localhost:${PORT}/api/debug/equipment`); // ← NUEVO
-});
+const startServer = async () => {
+  try {
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('✅ MySQL connected successfully');
+    
+    // Log loaded models
+    console.log('📋 Models loaded:', Object.keys(sequelize.models));
+    
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📡 CORS enabled for origins:`, corsOptions.origin);
+      console.log(`🔗 API available at: http://localhost:${PORT}/api`);
+      console.log(`❤️  Health check: http://localhost:${PORT}/api/health`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Unable to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();

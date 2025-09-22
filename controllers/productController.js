@@ -2,17 +2,18 @@
 const { Product, User, Category } = require('../models'); // ← AGREGADO: Category
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
+const sequelize = require('../config/database'); // ← AGREGADO: Import sequelize
 
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Private
 const getProducts = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search, 
-      category,  // ← AGREGADO: filtro por categoría
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      category,
       servicio,
       especialidad,
       clasificacion,
@@ -22,58 +23,71 @@ const getProducts = async (req, res) => {
       maxPrice,
       sort = 'createdAt'
     } = req.query;
-    
+
     // Build where clause
     let whereClause = {};
-    
+
     if (search) {
+      // ========== CORREGIDO: Usar nombre correcto de columna ==========
       whereClause[Op.or] = [
-        { code: { [Op.iLike]: `%${search}%` } },
-        { item: { [Op.iLike]: `%${search}%` } },
-        { servicio: { [Op.iLike]: `%${search}%` } },
-        { especialidad: { [Op.iLike]: `%${search}%` } },
-        { clasificacion: { [Op.iLike]: `%${search}%` } },
-        { paraDescripcion: { [Op.iLike]: `%${search}%` } },
-        { proveedor: { [Op.iLike]: `%${search}%` } }
+        { code: { [Op.like]: `%${search}%` } },
+        { item: { [Op.like]: `%${search}%` } },
+        { servicio: { [Op.like]: `%${search}%` } },
+        { especialidad: { [Op.like]: `%${search}%` } },
+        { clasificacion: { [Op.like]: `%${search}%` } },
+        { para_descripcion: { [Op.like]: `%${search}%` } },
+        { proveedor: { [Op.like]: `%${search}%` } }
       ];
     }
-    
-    // ========== AGREGADO: Filtro por categoría ==========
+
+    // ========== CORREGIDO: Mejor manejo del filtro por categoría ==========
     if (category) {
-      if (isNaN(category)) {
-        // Si category es un nombre, buscar por el nombre de la categoría
-        whereClause['$category.name$'] = { [Op.iLike]: `%${category}%` };
+      // Buscar categorías que coincidan primero
+      const matchingCategories = await Category.findAll({
+        where: {
+          name: {
+            [Op.like]: `%${category}%`
+          }
+        },
+        attributes: ['id']
+      });
+
+      if (matchingCategories.length > 0) {
+        whereClause.categoryId = {
+          [Op.in]: matchingCategories.map(cat => cat.id)
+        };
       } else {
-        // Si es un ID, buscar por categoryId
-        whereClause.categoryId = category;
+        // Si no se encuentra ninguna categoría, usar un ID que no existe
+        whereClause.categoryId = -1;
       }
     }
-    
+
     if (servicio) {
-      whereClause.servicio = { [Op.iLike]: `%${servicio}%` };
+      whereClause.servicio = { [Op.like]: `%${servicio}%` };
     }
-    
+
     if (especialidad) {
-      whereClause.especialidad = { [Op.iLike]: `%${especialidad}%` };
+      whereClause.especialidad = { [Op.like]: `%${especialidad}%` };
     }
-    
+
     if (clasificacion) {
-      whereClause.clasificacion = { [Op.iLike]: `%${clasificacion}%` };
+      whereClause.clasificacion = { [Op.like]: `%${clasificacion}%` };
     }
-    
+
     if (proveedor) {
-      whereClause.proveedor = { [Op.iLike]: `%${proveedor}%` };
+      whereClause.proveedor = { [Op.like]: `%${proveedor}%` };
     }
-    
+
     if (almacen) {
-      whereClause.almacen = { [Op.iLike]: `%${almacen}%` };
+      whereClause.almacen = { [Op.like]: `%${almacen}%` };
     }
-    
+
     if (minPrice || maxPrice) {
-      whereClause.precioVentaPaquete = {};
-      if (minPrice) whereClause.precioVentaPaquete[Op.gte] = parseFloat(minPrice);
-      if (maxPrice) whereClause.precioVentaPaquete[Op.lte] = parseFloat(maxPrice);
+      whereClause.precio_venta_paquete = {};
+      if (minPrice) whereClause.precio_venta_paquete[Op.gte] = parseFloat(minPrice);
+      if (maxPrice) whereClause.precio_venta_paquete[Op.lte] = parseFloat(maxPrice);
     }
+
 
     // Calculate offset
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -86,7 +100,7 @@ const getProducts = async (req, res) => {
       orderClause.push([sortField, sortDirection]);
     }
 
-    console.log('Product query whereClause:', whereClause); // ← DEBUG
+    console.log('Product query whereClause:', whereClause);
 
     const { count, rows: products } = await Product.findAndCountAll({
       where: whereClause,
@@ -96,12 +110,11 @@ const getProducts = async (req, res) => {
           as: 'creator',
           attributes: ['firstName', 'lastName', 'username']
         },
-        // ========== AGREGADO: Incluir categoría ==========
         {
           model: Category,
           as: 'category',
           attributes: ['id', 'name', 'description'],
-          required: false // LEFT JOIN para incluir productos sin categoría
+          required: false
         }
       ],
       order: orderClause,
@@ -109,7 +122,7 @@ const getProducts = async (req, res) => {
       offset: offset
     });
 
-    console.log(`Found ${count} products, returning ${products.length}`); // ← DEBUG
+    console.log(`Found ${count} products, returning ${products.length}`);
 
     res.json({
       success: true,
@@ -188,10 +201,10 @@ const createProduct = async (req, res) => {
     }
 
     // Check if product code already exists
-    const existingProduct = await Product.findOne({ 
-      where: { code: req.body.code.toUpperCase() } 
+    const existingProduct = await Product.findOne({
+      where: { code: req.body.code.toUpperCase() }
     });
-    
+
     if (existingProduct) {
       return res.status(400).json({
         success: false,
@@ -374,7 +387,7 @@ const deleteProduct = async (req, res) => {
 const getProductStats = async (req, res) => {
   try {
     const totalProducts = await Product.count();
-    
+
     // Servicios stats
     const servicioStats = await Product.findAll({
       attributes: [

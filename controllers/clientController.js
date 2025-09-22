@@ -179,7 +179,7 @@ const createClient = async (req, res) => {
       state: state?.trim(),
       zipCode: zipCode?.trim(),
       country: country || 'México',
-      rfc: rfc?.trim(),
+      rfc: (rfc && rfc.trim() && rfc.trim() !== '') ? rfc.trim().toUpperCase() : null,  // ← CORREGIDO: RFC opcional
       clientType: clientType || 'Hospital',
       notes: notes,
       
@@ -206,7 +206,7 @@ const createClient = async (req, res) => {
       createdBy: req.user?.id || 1 
     };
 
-    // ========== MANEJAR DATOS JSON DEL NOTES ==========
+    // ========== MANEJAR DATOS JSON DEL NOTES Y ENCARGADOS ==========
     if (notes && typeof notes === 'string') {
       try {
         const notesData = JSON.parse(notes);
@@ -223,6 +223,33 @@ const createClient = async (req, res) => {
         processedData.lastMaintenance = processedData.lastMaintenance || notesData.ultimoMantenimiento;
         processedData.statusApril2025 = processedData.statusApril2025 || notesData.estatusAbril2025;
         processedData.statusStart2026 = processedData.statusStart2026 || notesData.estatusInicio26;
+        
+        // ========== NUEVO: Manejar encargados ==========
+        if (notesData.encargados && Array.isArray(notesData.encargados)) {
+          const encargadosValidos = notesData.encargados.filter(enc => 
+            enc.nombre && enc.nombre.trim() !== ''
+          );
+          
+          if (encargadosValidos.length > 0) {
+            // Usar el primer encargado como contacto principal
+            const encargadoPrincipal = encargadosValidos[0];
+            
+            processedData.contact = encargadoPrincipal.nombre.trim();
+            
+            // Si el encargado tiene email, usarlo (si no, mantener el email enviado)
+            if (encargadoPrincipal.email && encargadoPrincipal.email.trim() !== '') {
+              processedData.email = encargadoPrincipal.email.toLowerCase().trim();
+            }
+            
+            // Si el encargado tiene teléfono, usarlo (si no, mantener el phone enviado)
+            if (encargadoPrincipal.telefono && encargadoPrincipal.telefono.trim() !== '') {
+              processedData.phone = encargadoPrincipal.telefono.trim();
+            }
+            
+            console.log(`👥 Procesando ${encargadosValidos.length} encargado(s) para cliente ${processedData.name}`);
+            console.log(`👤 Encargado principal: ${encargadoPrincipal.nombre} (${encargadoPrincipal.cargo || 'Sin cargo'})`);
+          }
+        }
         
       } catch (jsonError) {
         console.warn('⚠️ Error parsing notes JSON:', jsonError);
@@ -301,6 +328,13 @@ const updateClient = async (req, res) => {
       }
     }
 
+    // ========== CORREGIR RFC EN ACTUALIZACIÓN ==========
+    if (updateData.rfc !== undefined) {
+      updateData.rfc = (updateData.rfc && updateData.rfc.trim() && updateData.rfc.trim() !== '') 
+        ? updateData.rfc.trim().toUpperCase() 
+        : null;
+    }
+
     // Procesar datos JSON del notes si existe
     if (updateData.notes && typeof updateData.notes === 'string') {
       try {
@@ -317,6 +351,29 @@ const updateClient = async (req, res) => {
         updateData.lastMaintenance = updateData.lastMaintenance || notesData.ultimoMantenimiento;
         updateData.statusApril2025 = updateData.statusApril2025 || notesData.estatusAbril2025;
         updateData.statusStart2026 = updateData.statusStart2026 || notesData.estatusInicio26;
+        
+        // ========== MANEJAR ENCARGADOS EN ACTUALIZACIÓN ==========
+        if (notesData.encargados && Array.isArray(notesData.encargados)) {
+          const encargadosValidos = notesData.encargados.filter(enc => 
+            enc.nombre && enc.nombre.trim() !== ''
+          );
+          
+          if (encargadosValidos.length > 0) {
+            const encargadoPrincipal = encargadosValidos[0];
+            
+            updateData.contact = encargadoPrincipal.nombre.trim();
+            
+            if (encargadoPrincipal.email && encargadoPrincipal.email.trim() !== '') {
+              updateData.email = encargadoPrincipal.email.toLowerCase().trim();
+            }
+            
+            if (encargadoPrincipal.telefono && encargadoPrincipal.telefono.trim() !== '') {
+              updateData.phone = encargadoPrincipal.telefono.trim();
+            }
+            
+            console.log(`👥 Actualizando con ${encargadosValidos.length} encargado(s)`);
+          }
+        }
         
       } catch (jsonError) {
         console.warn('⚠️ Error parsing notes JSON:', jsonError);
@@ -430,11 +487,312 @@ const getClientStats = async (req, res) => {
   }
 };
 
+// ========== NUEVOS MÉTODOS PARA MANEJAR ENCARGADOS ==========
+
+// Obtener encargados de un cliente específico
+const getClientEncargados = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const client = await Client.findByPk(id, {
+      attributes: { exclude: ['deletedAt'] }
+    });
+    
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente no encontrado'
+      });
+    }
+    
+    // Extraer encargados del campo notes
+    let encargados = [];
+    try {
+      if (client.notes) {
+        const notesData = JSON.parse(client.notes);
+        encargados = notesData.encargados || [];
+      }
+    } catch (error) {
+      console.warn('Error parsing notes for encargados:', error);
+    }
+    
+    // Si no hay encargados, crear uno basado en los datos principales
+    if (encargados.length === 0) {
+      encargados = [{
+        id: 1,
+        nombre: client.contact || 'Encargado Principal',
+        cargo: 'Contacto Principal',
+        telefono: client.phone || '',
+        email: client.email || '',
+        fechaRegistro: client.createdAt || new Date().toISOString()
+      }];
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: encargados
+    });
+  } catch (error) {
+    console.error('Get client encargados error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener encargados',
+      error: error.message
+    });
+  }
+};
+
+// Agregar encargado a un cliente existente
+const addEncargadoToClient = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, cargo, telefono, email } = req.body;
+    
+    if (!nombre || nombre.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'El nombre del encargado es requerido'
+      });
+    }
+    
+    const client = await Client.findByPk(id);
+    
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente no encontrado'
+      });
+    }
+    
+    // Obtener encargados actuales
+    let notesData = {};
+    let encargados = [];
+    
+    try {
+      if (client.notes) {
+        notesData = JSON.parse(client.notes);
+        encargados = notesData.encargados || [];
+      }
+    } catch (error) {
+      console.warn('Error parsing existing notes:', error);
+    }
+    
+    // Crear nuevo encargado
+    const newEncargado = {
+      id: Date.now(),
+      nombre: nombre.trim(),
+      cargo: cargo?.trim() || '',
+      telefono: telefono?.trim() || '',
+      email: email?.trim() || '',
+      fechaRegistro: new Date().toISOString()
+    };
+    
+    // Agregar a la lista
+    encargados.push(newEncargado);
+    
+    // Actualizar notes
+    notesData.encargados = encargados;
+    
+    // Si es el primer encargado, actualizar campos principales
+    if (encargados.length === 1) {
+      await client.update({
+        contact: newEncargado.nombre,
+        email: newEncargado.email || client.email,
+        phone: newEncargado.telefono || client.phone,
+        notes: JSON.stringify(notesData)
+      });
+    } else {
+      await client.update({
+        notes: JSON.stringify(notesData)
+      });
+    }
+    
+    res.status(201).json({
+      success: true,
+      data: newEncargado,
+      message: 'Encargado agregado exitosamente'
+    });
+    
+  } catch (error) {
+    console.error('Add encargado error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al agregar encargado',
+      error: error.message
+    });
+  }
+};
+
+// Actualizar encargado específico
+const updateClientEncargado = async (req, res) => {
+  try {
+    const { id, encargadoId } = req.params;
+    const { nombre, cargo, telefono, email } = req.body;
+    
+    const client = await Client.findByPk(id);
+    
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente no encontrado'
+      });
+    }
+    
+    let notesData = {};
+    let encargados = [];
+    
+    try {
+      if (client.notes) {
+        notesData = JSON.parse(client.notes);
+        encargados = notesData.encargados || [];
+      }
+    } catch (error) {
+      console.warn('Error parsing existing notes:', error);
+    }
+    
+    // Buscar y actualizar encargado
+    const encargadoIndex = encargados.findIndex(enc => enc.id == encargadoId);
+    
+    if (encargadoIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Encargado no encontrado'
+      });
+    }
+    
+    // Actualizar encargado
+    encargados[encargadoIndex] = {
+      ...encargados[encargadoIndex],
+      nombre: nombre?.trim() || encargados[encargadoIndex].nombre,
+      cargo: cargo?.trim() || '',
+      telefono: telefono?.trim() || '',
+      email: email?.trim() || ''
+    };
+    
+    // Actualizar notes
+    notesData.encargados = encargados;
+    
+    // Si es el encargado principal (index 0), actualizar campos principales
+    if (encargadoIndex === 0) {
+      await client.update({
+        contact: encargados[0].nombre,
+        email: encargados[0].email || client.email,
+        phone: encargados[0].telefono || client.phone,
+        notes: JSON.stringify(notesData)
+      });
+    } else {
+      await client.update({
+        notes: JSON.stringify(notesData)
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: encargados[encargadoIndex],
+      message: 'Encargado actualizado exitosamente'
+    });
+    
+  } catch (error) {
+    console.error('Update encargado error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar encargado',
+      error: error.message
+    });
+  }
+};
+
+// Eliminar encargado específico
+const removeEncargadoFromClient = async (req, res) => {
+  try {
+    const { id, encargadoId } = req.params;
+    
+    const client = await Client.findByPk(id);
+    
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente no encontrado'
+      });
+    }
+    
+    let notesData = {};
+    let encargados = [];
+    
+    try {
+      if (client.notes) {
+        notesData = JSON.parse(client.notes);
+        encargados = notesData.encargados || [];
+      }
+    } catch (error) {
+      console.warn('Error parsing existing notes:', error);
+    }
+    
+    // Verificar que no sea el último encargado
+    if (encargados.length <= 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se puede eliminar el último encargado. Debe haber al menos uno.'
+      });
+    }
+    
+    // Buscar índice del encargado a eliminar
+    const encargadoIndex = encargados.findIndex(enc => enc.id == encargadoId);
+    
+    if (encargadoIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Encargado no encontrado'
+      });
+    }
+    
+    // Eliminar encargado
+    const encargadoEliminado = encargados.splice(encargadoIndex, 1)[0];
+    
+    // Actualizar notes
+    notesData.encargados = encargados;
+    
+    // Si eliminamos el encargado principal (index 0), promover el siguiente
+    if (encargadoIndex === 0 && encargados.length > 0) {
+      await client.update({
+        contact: encargados[0].nombre,
+        email: encargados[0].email || client.email,
+        phone: encargados[0].telefono || client.phone,
+        notes: JSON.stringify(notesData)
+      });
+    } else {
+      await client.update({
+        notes: JSON.stringify(notesData)
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: encargadoEliminado,
+      message: 'Encargado eliminado exitosamente'
+    });
+    
+  } catch (error) {
+    console.error('Remove encargado error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al eliminar encargado',
+      error: error.message
+    });
+  }
+};
+
+// ========== EXPORTACIONES ==========
 module.exports = {
   getClients,
   getClient,
   createClient,
   updateClient,
   deleteClient,
-  getClientStats
+  getClientStats,
+  // ========== NUEVOS MÉTODOS DE ENCARGADOS ==========
+  getClientEncargados,
+  addEncargadoToClient,
+  updateClientEncargado,
+  removeEncargadoFromClient
 };

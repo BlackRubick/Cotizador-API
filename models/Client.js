@@ -14,16 +14,14 @@ const Client = sequelize.define('Client', {
     allowNull: false,
     validate: {
       notEmpty: { msg: 'Client name is required' }
-    },
-    comment: 'Nombre del cliente / Empresa responsable'
+    }
   },
   contact: {
     type: DataTypes.STRING(100),
     allowNull: false,
     validate: {
       notEmpty: { msg: 'Contact person is required' }
-    },
-    comment: 'Persona de contacto / Dependencia'
+    }
   },
   email: {
     type: DataTypes.STRING(100),
@@ -31,48 +29,40 @@ const Client = sequelize.define('Client', {
     unique: true,
     validate: {
       isEmail: { msg: 'Please enter a valid email' }
-    },
-    comment: 'Email de contacto'
+    }
   },
   phone: {
     type: DataTypes.STRING(20),
     allowNull: false,
     validate: {
       notEmpty: { msg: 'Phone is required' }
-    },
-    comment: 'Teléfono de contacto'
+    }
   },
   
   // ========== DIRECCIÓN ==========
   street: {
-    type: DataTypes.STRING(200),
-    allowNull: true,
-    comment: 'Calle y número'
+    type: DataTypes.STRING(255),
+    allowNull: true
   },
   city: {
     type: DataTypes.STRING(100),
-    allowNull: true,
-    comment: 'Ciudad'
+    allowNull: true
   },
   state: {
     type: DataTypes.STRING(100),
-    allowNull: true,
-    comment: 'Estado'
+    allowNull: true
   },
   zipCode: {
     type: DataTypes.STRING(10),
-    allowNull: true,
-    comment: 'Código postal'
+    allowNull: true
   },
   country: {
     type: DataTypes.STRING(100),
-    defaultValue: 'México',
-    comment: 'País'
+    defaultValue: 'México'
   },
   fullAddress: {
     type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Dirección completa concatenada'
+    allowNull: true
   },
   
   // ========== INFORMACIÓN FISCAL ==========
@@ -80,12 +70,20 @@ const Client = sequelize.define('Client', {
     type: DataTypes.STRING(13),
     allowNull: true,
     validate: {
-      is: {
-        args: /^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/,
-        msg: 'Please enter a valid RFC'
+      // ========== CORREGIDO: RFC opcional ==========
+      customValidator(value) {
+        // Permitir valores vacíos, null o undefined
+        if (!value || value === '' || value === null) {
+          return;
+        }
+        
+        // Solo validar si tiene un valor real
+        const rfcPattern = /^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/;
+        if (!rfcPattern.test(value)) {
+          throw new Error('Please enter a valid RFC format (e.g., XAXX010101000)');
+        }
       }
-    },
-    comment: 'RFC del cliente'
+    }
   },
   
   // ========== CLASIFICACIÓN ==========
@@ -98,104 +96,106 @@ const Client = sequelize.define('Client', {
       'Consultorio',
       'Otro'
     ),
-    defaultValue: 'Hospital',
-    comment: 'Tipo de cliente'
+    allowNull: false
   },
   
-  // ========== CAMPOS ESPECÍFICOS PARA HOSPITALES ==========
+  status: {
+    type: DataTypes.ENUM('active', 'inactive', 'suspended'),
+    defaultValue: 'active'
+  },
+  
+  notes: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  
+  // ========== CAMPOS ESPECÍFICOS PARA HOSPITALES (MAPEAR A COLUMNAS REALES) ==========
   hospitalName: {
     type: DataTypes.STRING(200),
     allowNull: true,
-    field: 'hospital_name',
-    comment: 'Nombre específico del hospital'
+    field: 'hospital_name' // ← MAPEO A COLUMNA REAL
   },
   dependencia: {
     type: DataTypes.STRING(200),
     allowNull: true,
-    comment: 'Dependencia del hospital'
+    field: 'dependencia' // ← YA COINCIDE
   },
   contrato: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    comment: 'Número de contrato'
+    field: 'contrato' // ← YA COINCIDE
   },
   
-  // ========== INFORMACIÓN DE EQUIPO ==========
+  // ========== INFORMACIÓN DE EQUIPO (MAPEAR A COLUMNAS REALES) ==========
   equipmentName: {
     type: DataTypes.STRING(200),
     allowNull: true,
-    field: 'equipment_name',
-    comment: 'Nombre del equipo médico'
+    field: 'equipment_name' // ← MAPEO A COLUMNA REAL
   },
   equipmentBrand: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    field: 'equipment_brand',
-    comment: 'Marca del equipo'
+    field: 'equipment_brand' // ← MAPEO A COLUMNA REAL
   },
   equipmentModel: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    field: 'equipment_model',
-    comment: 'Modelo del equipo'
+    field: 'equipment_model' // ← MAPEO A COLUMNA REAL
   },
   serialNumber: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    field: 'serial_number',
-    comment: 'Número de serie del equipo'
+    field: 'serial_number' // ← MAPEO A COLUMNA REAL
   },
   
-  // ========== FECHAS IMPORTANTES ==========
+  // ========== FECHAS (MAPEAR A COLUMNAS REALES) ==========
   installationDate: {
     type: DataTypes.DATEONLY,
     allowNull: true,
-    field: 'installation_date',
-    comment: 'Fecha de instalación del equipo'
+    field: 'installation_date' // ← MAPEO A COLUMNA REAL
   },
   lastMaintenance: {
     type: DataTypes.DATEONLY,
     allowNull: true,
-    field: 'last_maintenance',
-    comment: 'Fecha del último mantenimiento'
+    field: 'last_maintenance' // ← MAPEO A COLUMNA REAL
   },
   
-  // ========== ESTATUS ==========
-  status: {
-    type: DataTypes.ENUM('active', 'inactive', 'pending'),
-    defaultValue: 'active',
-    comment: 'Estado del cliente'
-  },
+  // ========== ESTATUS (MAPEAR A COLUMNAS REALES) ==========
   statusApril2025: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    field: 'status_april_2025',
-    comment: 'Estatus para abril 2025'
+    field: 'status_april_2025' // ← MAPEO A COLUMNA REAL
   },
   statusStart2026: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    field: 'status_start_2026',
-    comment: 'Estatus para inicio 2026'
-  },
-  
-  // ========== NOTAS Y METADATA ==========
-  notes: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Notas adicionales y datos JSON'
+    field: 'status_start_2026' // ← MAPEO A COLUMNA REAL
   },
   
   // ========== AUDITORÍA ==========
   createdBy: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'users',
       key: 'id'
-    },
-    comment: 'Usuario que creó el registro'
+    }
+  },
+  
+  // ========== CAMPOS DE COTIZACIONES ==========
+  lastQuoteDate: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  totalQuotes: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  totalAmount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00
   }
+  
 }, {
   tableName: 'clients',
   timestamps: true,
@@ -205,36 +205,12 @@ const Client = sequelize.define('Client', {
     { fields: ['name'] },
     { fields: ['clientType'] },
     { fields: ['status'] },
-    { fields: ['serialNumber'] },
+    { fields: ['serial_number'] },
     { fields: ['city'] },
     { fields: ['state'] },
     { fields: ['createdBy'] },
     { fields: ['createdAt'] }
-  ],
-  hooks: {
-    beforeSave: (client) => {
-      // Normalizar email
-      if (client.email) {
-        client.email = client.email.toLowerCase().trim();
-      }
-      
-      // Crear dirección completa
-      if (client.street || client.city || client.state || client.zipCode || client.country) {
-        client.fullAddress = [
-          client.street,
-          client.city,
-          client.state,
-          client.zipCode,
-          client.country
-        ].filter(Boolean).join(', ');
-      }
-      
-      // Normalizar RFC
-      if (client.rfc) {
-        client.rfc = client.rfc.toUpperCase().trim();
-      }
-    }
-  }
+  ]
 });
 
 // ========== ASOCIACIONES ==========
@@ -249,12 +225,6 @@ Client.associate = (models) => {
   Client.hasMany(models.Quote, {
     foreignKey: 'clientId',
     as: 'quotes'
-  });
-  
-  // Un cliente puede tener muchos equipos
-  Client.hasMany(models.Equipment, {
-    foreignKey: 'clientId',
-    as: 'equipment'
   });
 };
 

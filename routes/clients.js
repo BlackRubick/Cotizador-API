@@ -2,13 +2,19 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 
+// ========== IMPORTAR TODOS LOS CONTROLADORES ==========
 const {
   getClients,
   getClient,
   createClient,
   updateClient,
   deleteClient,
-  getClientStats
+  getClientStats,
+  // ========== NUEVOS MÉTODOS DE ENCARGADOS ==========
+  getClientEncargados,
+  addEncargadoToClient,
+  updateClientEncargado,
+  removeEncargadoFromClient
 } = require('../controllers/clientController');
 
 // ========== TEMPORAL: Comentar middleware de autenticación ==========
@@ -39,8 +45,18 @@ const clientValidation = [
     .withMessage('Invalid client type'),
   body('rfc')
     .optional()
-    .matches(/^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/)
-    .withMessage('Please enter a valid RFC'),
+    .custom((value) => {
+      // ========== CORREGIDO: RFC opcional sin validación estricta ==========
+      if (!value || value.trim() === '') {
+        return true; // Permitir RFC vacío
+      }
+      // Solo validar formato si tiene contenido
+      const rfcPattern = /^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/;
+      if (!rfcPattern.test(value)) {
+        throw new Error('Please enter a valid RFC format');
+      }
+      return true;
+    }),
     
   // ========== CAMPOS ESPECÍFICOS DE HOSPITAL ==========
   body('hospitalName')
@@ -95,8 +111,51 @@ const clientValidation = [
     .withMessage('Status start 2026 cannot exceed 100 characters')
 ];
 
-// ========== TEMPORAL: Sin middleware de autenticación ==========
-// router.use(protect);
+// ========== VALIDACIONES PARA ENCARGADOS ==========
+const encargadoValidation = [
+  body('nombre')
+    .notEmpty()
+    .withMessage('Nombre del encargado es requerido')
+    .isLength({ max: 100 })
+    .withMessage('Nombre cannot exceed 100 characters'),
+  body('cargo')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('Cargo cannot exceed 100 characters'),
+  body('telefono')
+    .optional()
+    .isLength({ max: 20 })
+    .withMessage('Teléfono cannot exceed 20 characters'),
+  body('email')
+    .optional()
+    .custom((value) => {
+      // Permitir email vacío o validar formato
+      if (!value || value.trim() === '') {
+        return true;
+      }
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailPattern.test(value)) {
+        throw new Error('Please enter a valid email format');
+      }
+      return true;
+    })
+    .normalizeEmail()
+];
+
+// ========== MIDDLEWARE TEMPORAL PARA DESARROLLO ==========
+const mockAuth = (req, res, next) => {
+  // Simular usuario autenticado para desarrollo
+  req.user = {
+    id: 1,
+    username: 'admin',
+    firstName: 'Admin',
+    lastName: 'User'
+  };
+  next();
+};
+
+// ========== APLICAR MIDDLEWARE TEMPORAL ==========
+router.use(mockAuth);
 
 // ========== RUTAS DE CLIENTES ==========
 router.get('/stats', getClientStats);
@@ -105,5 +164,11 @@ router.get('/:id', getClient);
 router.post('/', clientValidation, createClient);
 router.put('/:id', clientValidation, updateClient);
 router.delete('/:id', deleteClient);
+
+// ========== NUEVAS RUTAS PARA ENCARGADOS ==========
+router.get('/:id/encargados', getClientEncargados);
+router.post('/:id/encargados', encargadoValidation, addEncargadoToClient);
+router.put('/:id/encargados/:encargadoId', encargadoValidation, updateClientEncargado);
+router.delete('/:id/encargados/:encargadoId', removeEncargadoFromClient);
 
 module.exports = router;

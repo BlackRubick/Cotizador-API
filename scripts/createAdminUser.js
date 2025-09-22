@@ -1,56 +1,215 @@
-// scripts/createAdminUser.js - Script para crear usuario administrador
+// scripts/createConduitUsers.js - Script para crear usuarios de Conduit Life
 const { User } = require('../models');
 const sequelize = require('../config/database');
 require('dotenv').config();
 
-const createAdminUser = async () => {
+// Definir los usuarios a crear - TODOS CON ROL ADMIN
+const usersToCreate = [
+  {
+    username: 'especialista.producto',
+    email: 'especialista.producto@conduitlife.mx',
+    firstName: 'Especialista',
+    lastName: 'Producto',
+    phone: '+529611234567',
+    role: 'admin',
+    position: 'Especialista en Producto',
+    password: 'Conduit2024!' // Cambiar en producción
+  },
+  {
+    username: 'alfonso.romero',
+    email: 'alfonso.romero@conduitlife.mx',
+    firstName: 'Alfonso',
+    lastName: 'Romero',
+    phone: '+529611234568',
+    role: 'admin',
+    position: 'Gerente',
+    password: 'Conduit2024!' // Cambiar en producción
+  },
+  {
+    username: 'jose.navarrete',
+    email: 'Jose.navarrete@conduitlife.mx',
+    firstName: 'José',
+    lastName: 'Navarrete',
+    phone: '+529611234569',
+    role: 'admin',
+    position: 'Colaborador',
+    password: 'Conduit2024!' // Cambiar en producción
+  },
+  {
+    username: 'asistente',
+    email: 'asistente@conduitlife.mx',
+    firstName: 'Asistente',
+    lastName: 'General',
+    phone: '+529611234570',
+    role: 'admin',
+    position: 'Asistente Administrativo',
+    password: 'Conduit2024!' // Cambiar en producción
+  },
+  {
+    username: 'eduardo.navarrete',
+    email: 'eduardo.navarrete@conduitlife.mx',
+    firstName: 'Eduardo',
+    lastName: 'Navarrete',
+    phone: '+529611234571',
+    role: 'admin',
+    position: 'Colaborador',
+    password: 'Conduit2024!' // Cambiar en producción
+  }
+];
+
+const createConduitUsers = async () => {
   try {
     console.log('🔄 Conectando a la base de datos...');
     await sequelize.authenticate();
     console.log('✅ Conectado a MySQL');
 
-    // Verificar si ya existe un admin
-    const existingAdmin = await User.findOne({
-      where: { role: 'admin' }
-    });
+    console.log('👥 Creando usuarios de Conduit Life...\n');
 
-    if (existingAdmin) {
-      console.log('⚠️  Ya existe un usuario administrador:');
-      console.log(`   Username: ${existingAdmin.username}`);
-      console.log(`   Email: ${existingAdmin.email}`);
-      console.log(`   Nombre: ${existingAdmin.firstName} ${existingAdmin.lastName}`);
-      return existingAdmin;
+    const createdUsers = [];
+    const existingUsers = [];
+
+    for (const userData of usersToCreate) {
+      try {
+        // Verificar si el usuario ya existe por email o username
+        const existingUser = await User.findOne({
+          where: {
+            $or: [
+              { email: userData.email },
+              { username: userData.username }
+            ]
+          }
+        });
+
+        if (existingUser) {
+          console.log(`⚠️  Usuario ya existe: ${userData.email}`);
+          console.log(`   Username: ${existingUser.username}`);
+          console.log(`   Nombre: ${existingUser.firstName} ${existingUser.lastName}`);
+          console.log(`   Role: ${existingUser.role}\n`);
+          existingUsers.push(existingUser);
+          continue;
+        }
+
+        // Crear el nuevo usuario
+        const newUser = await User.create({
+          ...userData,
+          isActive: true
+        });
+
+        console.log(`✅ Usuario creado: ${userData.email}`);
+        console.log(`   ID: ${newUser.id}`);
+        console.log(`   Username: ${newUser.username}`);
+        console.log(`   Nombre: ${newUser.firstName} ${newUser.lastName}`);
+        console.log(`   Role: ${newUser.role}`);
+        console.log(`   Position: ${newUser.position}\n`);
+
+        createdUsers.push(newUser);
+
+      } catch (userError) {
+        console.error(`❌ Error creando usuario ${userData.email}:`, userError.message);
+        continue;
+      }
     }
 
-    console.log('👤 Creando usuario administrador...');
+    // Resumen final
+    console.log('\n📊 RESUMEN DE OPERACIÓN:');
+    console.log(`✅ Usuarios creados: ${createdUsers.length}`);
+    console.log(`⚠️  Usuarios existentes: ${existingUsers.length}`);
+    
+    if (createdUsers.length > 0) {
+      console.log('\n🔐 CREDENCIALES DE NUEVOS USUARIOS:');
+      console.log('================================================');
+      createdUsers.forEach(user => {
+        console.log(`👤 ${user.firstName} ${user.lastName}`);
+        console.log(`   Email: ${user.email}`);
+        console.log(`   Username: ${user.username}`);
+        console.log(`   Password: Conduit2024! (⚠️  CAMBIAR EN PRODUCCIÓN)`);
+        console.log(`   Role: ${user.role}`);
+        console.log('   ----------------------------------------');
+      });
+      console.log('⚠️  IMPORTANTE: Cambiar todas las contraseñas en producción');
+    }
 
-    const adminUser = await User.create({
-      username: 'admin',
-      email: 'admin@cotizador.com',
-      password: 'admin123', // Cambiar en producción
-      firstName: 'Administrador',
-      lastName: 'Sistema',
-      phone: '+529611234567',
-      role: 'admin',
-      position: 'Administrador del Sistema',
+    return { createdUsers, existingUsers };
+
+  } catch (error) {
+    console.error('❌ Error en la operación:', error);
+    throw error;
+  } finally {
+    await sequelize.close();
+  }
+};
+
+// Función para crear un usuario individual
+const createSingleUser = async (userData) => {
+  try {
+    await sequelize.authenticate();
+    
+    const existingUser = await User.findOne({
+      where: {
+        $or: [
+          { email: userData.email },
+          { username: userData.username }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      console.log(`⚠️  Usuario ya existe: ${userData.email}`);
+      return existingUser;
+    }
+
+    const newUser = await User.create({
+      ...userData,
       isActive: true
     });
 
-    console.log('✅ Usuario administrador creado exitosamente:');
-    console.log(`   ID: ${adminUser.id}`);
-    console.log(`   Username: ${adminUser.username}`);
-    console.log(`   Email: ${adminUser.email}`);
-    console.log(`   Password: admin123 (⚠️  CAMBIAR EN PRODUCCIÓN)`);
-    console.log(`   Role: ${adminUser.role}`);
-
-    console.log('\n🔐 Credenciales de acceso:');
-    console.log('   Usuario: admin');
-    console.log('   Contraseña: admin123');
-
-    return adminUser;
+    console.log(`✅ Usuario creado: ${userData.email}`);
+    return newUser;
 
   } catch (error) {
-    console.error('❌ Error creando usuario admin:', error);
+    console.error(`❌ Error creando usuario:`, error);
+    throw error;
+  }
+};
+
+// Función para listar usuarios de Conduit Life
+const listConduitUsers = async () => {
+  try {
+    await sequelize.authenticate();
+    
+    const users = await User.findAll({
+      where: {
+        email: {
+          $like: '%@conduitlife.mx'
+        }
+      },
+      attributes: ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'position', 'isActive', 'createdAt']
+    });
+
+    console.log('\n👥 USUARIOS DE CONDUIT LIFE:');
+    console.log('================================================');
+    
+    if (users.length === 0) {
+      console.log('No se encontraron usuarios de Conduit Life');
+      return [];
+    }
+
+    users.forEach(user => {
+      console.log(`👤 ${user.firstName} ${user.lastName}`);
+      console.log(`   ID: ${user.id}`);
+      console.log(`   Email: ${user.email}`);
+      console.log(`   Username: ${user.username}`);
+      console.log(`   Role: ${user.role}`);
+      console.log(`   Position: ${user.position}`);
+      console.log(`   Active: ${user.isActive ? '✅' : '❌'}`);
+      console.log(`   Created: ${user.createdAt.toLocaleDateString()}`);
+      console.log('   ----------------------------------------');
+    });
+
+    return users;
+
+  } catch (error) {
+    console.error('❌ Error listando usuarios:', error);
     throw error;
   } finally {
     await sequelize.close();
@@ -59,15 +218,34 @@ const createAdminUser = async () => {
 
 // Ejecutar si se llama directamente
 if (require.main === module) {
-  createAdminUser()
-    .then(() => {
-      console.log('✅ Admin user creado');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('❌ Error creando admin:', error);
-      process.exit(1);
-    });
+  const args = process.argv.slice(2);
+  
+  if (args.includes('--list')) {
+    listConduitUsers()
+      .then(() => {
+        console.log('✅ Operación completada');
+        process.exit(0);
+      })
+      .catch((error) => {
+        console.error('❌ Error:', error);
+        process.exit(1);
+      });
+  } else {
+    createConduitUsers()
+      .then(({ createdUsers, existingUsers }) => {
+        console.log(`\n✅ Operación completada - Creados: ${createdUsers.length}, Existentes: ${existingUsers.length}`);
+        process.exit(0);
+      })
+      .catch((error) => {
+        console.error('❌ Error creando usuarios:', error);
+        process.exit(1);
+      });
+  }
 }
 
-module.exports = { createAdminUser };
+module.exports = { 
+  createConduitUsers, 
+  createSingleUser, 
+  listConduitUsers, 
+  usersToCreate 
+};

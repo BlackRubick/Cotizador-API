@@ -30,7 +30,8 @@ const corsOptions = {
     'http://localhost:5173',
     'http://localhost:5174',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000'
+    'http://127.0.0.1:3000',
+    'http://52.14.169.93'
   ],
   credentials: true,
   optionsSuccessStatus: 200,

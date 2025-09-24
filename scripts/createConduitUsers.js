@@ -1,60 +1,20 @@
-// scripts/createConduitUsers.js - Script para crear usuarios de Conduit Life
+// scripts/createVendedorUser.js - Script para crear un usuario vendedor
 const { User } = require('../models');
 const sequelize = require('../config/database');
 const { Op } = require('sequelize');
 require('dotenv').config();
 
-// Definir los usuarios a crear - TODOS CON ROL ADMIN
+// Definir el usuario vendedor a crear
 const usersToCreate = [
   {
-    username: 'especialistaproducto',
-    email: 'especialista.producto@conduitlife.mx',
-    firstName: 'Especialista',
-    lastName: 'Producto',
-    phone: '+529611234567',
-    role: 'admin',
-    position: 'Especialista en Producto',
-    password: 'Conduit2024!' // Cambiar en producción
-  },
-  {
-    username: 'alfonsoromero',
-    email: 'alfonso.romero@conduitlife.mx',
-    firstName: 'Alfonso',
-    lastName: 'Romero',
-    phone: '+529611234568',
-    role: 'admin',
-    position: 'Gerente',
-    password: 'Conduit2024!' // Cambiar en producción
-  },
-  {
-    username: 'josenavarrete',
-    email: 'Jose.navarrete@conduitlife.mx',
-    firstName: 'José',
-    lastName: 'Navarrete',
-    phone: '+529611234569',
-    role: 'admin',
-    position: 'Colaborador',
-    password: 'Conduit2024!' // Cambiar en producción
-  },
-  {
-    username: 'asistente',
-    email: 'asistente@conduitlife.mx',
-    firstName: 'Asistente',
-    lastName: 'General',
-    phone: '+529611234570',
-    role: 'admin',
-    position: 'Asistente Administrativo',
-    password: 'Conduit2024!' // Cambiar en producción
-  },
-  {
-    username: 'eduardonavarrete',
-    email: 'eduardo.navarrete@conduitlife.mx',
-    firstName: 'Eduardo',
-    lastName: 'Navarrete',
-    phone: '+529611234571',
-    role: 'admin',
-    position: 'Colaborador',
-    password: 'Conduit2024!' // Cambiar en producción
+    username: 'carlos.vendedor',
+    email: 'carlos.mendez@conduitlife.mx',
+    firstName: 'Carlos',
+    lastName: 'Méndez',
+    phone: '+529612345678',
+    role: 'vendedor',
+    position: 'Vendedor Senior',
+    password: 'Vendedor2024!' // Cambiar en producción
   }
 ];
 
@@ -64,7 +24,7 @@ const createConduitUsers = async () => {
     await sequelize.authenticate();
     console.log('✅ Conectado a MySQL');
 
-    console.log('👥 Creando usuarios ADMINISTRADORES de Conduit Life...\n');
+    console.log('� Creando usuario VENDEDOR de Conduit Life...\n');
 
     const createdUsers = [];
     const existingUsers = [];
@@ -96,7 +56,7 @@ const createConduitUsers = async () => {
           isActive: true
         });
 
-        console.log(`✅ Usuario creado: ${userData.email}`);
+        console.log(`✅ Usuario vendedor creado: ${userData.email}`);
         console.log(`   ID: ${newUser.id}`);
         console.log(`   Username: ${newUser.username}`);
         console.log(`   Nombre: ${newUser.firstName} ${newUser.lastName}`);
@@ -117,17 +77,17 @@ const createConduitUsers = async () => {
     console.log(`⚠️  Usuarios existentes: ${existingUsers.length}`);
     
     if (createdUsers.length > 0) {
-      console.log('\n🔐 CREDENCIALES DE NUEVOS USUARIOS:');
+      console.log('\n🔐 CREDENCIALES DEL NUEVO VENDEDOR:');
       console.log('================================================');
       createdUsers.forEach(user => {
         console.log(`👤 ${user.firstName} ${user.lastName}`);
         console.log(`   Email: ${user.email}`);
         console.log(`   Username: ${user.username}`);
-        console.log(`   Password: Conduit2024! (⚠️  CAMBIAR EN PRODUCCIÓN)`);
+        console.log(`   Password: Vendedor2024! (⚠️  CAMBIAR EN PRODUCCIÓN)`);
         console.log(`   Role: ${user.role}`);
         console.log('   ----------------------------------------');
       });
-      console.log('⚠️  IMPORTANTE: Cambiar todas las contraseñas en producción');
+      console.log('⚠️  IMPORTANTE: Cambiar la contraseña en producción');
     }
 
     return { createdUsers, existingUsers };
@@ -238,7 +198,7 @@ if (require.main === module) {
         process.exit(0);
       })
       .catch((error) => {
-        console.error('❌ Error creando usuarios:', error);
+        console.error('❌ Error creando usuario vendedor:', error);
         process.exit(1);
       });
   }

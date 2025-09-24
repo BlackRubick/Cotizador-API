@@ -7,7 +7,7 @@ require('dotenv').config();
 // Definir el usuario vendedor a crear
 const usersToCreate = [
   {
-    username: 'carlos.vendedor',
+    username: 'carlosvendedor',
     email: 'carlos.mendez@conduitlife.mx',
     firstName: 'Carlos',
     lastName: 'Méndez',

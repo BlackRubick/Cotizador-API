@@ -12,7 +12,7 @@ const usersToCreate = [
     firstName: 'Carlos',
     lastName: 'Méndez',
     phone: '+529612345678',
-    role: 'vendedor',
+    role: 'user',
     position: 'Vendedor Senior',
     password: 'Vendedor2024!' // Cambiar en producción
   }

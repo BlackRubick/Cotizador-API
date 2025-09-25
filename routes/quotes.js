@@ -10,7 +10,8 @@ const {
   updateQuote,
   updateQuoteStatus,
   deleteQuote,
-  getQuoteStats
+  getQuoteStats,
+  sendQuoteEmail
 } = require('../controllers/quoteController');
 
 const { auth } = require('../middleware/auth');
@@ -66,5 +67,6 @@ router.post('/', quoteValidation, createQuote);
 router.put('/:id', quoteValidation, updateQuote);
 router.patch('/:id/status', statusUpdateValidation, updateQuoteStatus);
 router.delete('/:id', deleteQuote);
+router.post('/:id/send', sendQuoteEmail); // <--- Ruta para enviar cotización por email
 
 module.exports = router;

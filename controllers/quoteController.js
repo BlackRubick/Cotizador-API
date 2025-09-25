@@ -200,6 +200,19 @@ const createQuote = async (req, res) => {
       });
     }
 
+    // Validar productos: cantidad y precio deben ser números válidos
+    for (const item of products) {
+      if (
+        typeof item.quantity !== 'number' || isNaN(item.quantity) ||
+        typeof (item.basePrice ?? item.unitPrice) !== 'number' || isNaN(item.basePrice ?? item.unitPrice)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Todos los productos deben tener cantidad y precio válidos (números)'
+        });
+      }
+    }
+
     // Verificar cliente existe si se proporciona clientId
     let client = null;
     if (clientId) {

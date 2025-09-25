@@ -418,4 +418,65 @@ class EmailService {
   }
 }
 
+const branchEmails = {
+  conduitlife: {
+    user: 'cotizaciones@conduitlife.mx',
+    pass: 'Cotiza.321'
+  },
+  biosystems: {
+    user: 'cotizaciones@biosystemshls.com',
+    pass: 'Cotiza.321'
+  },
+  escalabiomedica: {
+    user: 'cotizaciones@escalabiomedica.com',
+    pass: 'Cotiza.321'
+  },
+  clinicaydiseno: {
+    user: 'cotizaciones@clinicaydiseno.com',
+    pass: 'Cotiza.321'
+  }
+};
+
+function getBranchTransport(branch) {
+  const config = branchEmails[branch];
+  if (!config) throw new Error('Sucursal no configurada');
+  return nodemailer.createTransport({
+    host: 'smtp.office365.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: config.user,
+      pass: config.pass
+    }
+  });
+}
+
+/**
+ * Envia un correo de cotización desde la sucursal indicada
+ * @param {Object} options
+ * @param {string} options.branch Sucursal (ej: 'conduitlife')
+ * @param {string} options.to Email del cliente
+ * @param {string} options.subject Asunto
+ * @param {string} options.text Texto del correo
+ * @param {string|Buffer} options.pdfBuffer PDF como Buffer o ruta
+ */
+async function sendBranchQuoteEmail({ branch, to, subject, text, pdfBuffer }) {
+  const transporter = getBranchTransport(branch);
+  const mailOptions = {
+    from: branchEmails[branch].user,
+    to,
+    subject,
+    text,
+    attachments: [
+      {
+        filename: 'cotizacion.pdf',
+        content: pdfBuffer,
+        contentType: 'application/pdf'
+      }
+    ]
+  };
+  return transporter.sendMail(mailOptions);
+}
+
 module.exports = new EmailService();
+module.exports.sendBranchQuoteEmail = sendBranchQuoteEmail;

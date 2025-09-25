@@ -2,6 +2,8 @@
 const { Quote, Client, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
+const { sendBranchQuoteEmail } = require('../services/emailService');
+const fs = require('fs');
 
 // Función helper para generar folio
 const generateFolio = async () => {
@@ -627,6 +629,11 @@ const generateQuotePDF = async (req, res) => {
 // @access  Private
 const sendQuoteEmail = async (req, res) => {
   try {
+    const branch = req.body.branch; // Sucursal enviada desde el frontend
+    if (!branch) {
+      return res.status(400).json({ success: false, message: 'Sucursal (branch) es requerida' });
+    }
+
     const quote = await Quote.findByPk(req.params.id, {
       include: [
         {
@@ -639,18 +646,35 @@ const sendQuoteEmail = async (req, res) => {
     });
 
     if (!quote) {
-      return res.status(404).json({
-        success: false,
-        message: 'Cotización no encontrada'
-      });
+      return res.status(404).json({ success: false, message: 'Cotización no encontrada' });
     }
 
-    // TODO: Implementar envío de email
-    // Por ahora, solo actualizar el estado y fecha de envío
-    await quote.update({
-      status: 'sent',
-      sentDate: new Date()
+    // Aquí deberías generar el PDF de la cotización
+    // Por ejemplo, si ya tienes el PDF generado y guardado:
+    // const pdfBuffer = fs.readFileSync(rutaDelPDF);
+    // Para este ejemplo, asumimos que tienes el PDF en req.body.pdfBuffer (Buffer base64)
+    let pdfBuffer;
+    if (req.body.pdfBuffer) {
+      pdfBuffer = Buffer.from(req.body.pdfBuffer, 'base64');
+    } else {
+      // Si no se envía el PDF, puedes devolver error o usar un placeholder
+      return res.status(400).json({ success: false, message: 'PDF de cotización es requerido' });
+    }
+
+    // Asunto y texto del correo
+    const subject = `Cotización ${quote.folio} - ${branch}`;
+    const text = `Estimado/a ${quote.clientInfoContact},\nAdjuntamos la cotización solicitada.\nFolio: ${quote.folio}`;
+
+    // Enviar correo desde la sucursal seleccionada
+    await sendBranchQuoteEmail({
+      branch,
+      to: quote.clientInfoEmail,
+      subject,
+      text,
+      pdfBuffer
     });
+
+    await quote.update({ status: 'sent', sentDate: new Date() });
 
     res.json({
       success: true,
@@ -659,16 +683,13 @@ const sendQuoteEmail = async (req, res) => {
         quoteId: quote.id,
         folio: quote.folio,
         sentTo: quote.clientInfoEmail,
-        sentDate: quote.sentDate
+        sentDate: quote.sentDate,
+        branch
       }
     });
-
   } catch (error) {
     console.error('Send quote email error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error del servidor'
-    });
+    res.status(500).json({ success: false, message: 'Error del servidor' });
   }
 };
 

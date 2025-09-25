@@ -106,7 +106,7 @@ const Quote = sequelize.define('Quote', {
   },
   createdBy: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'users',
       key: 'id'

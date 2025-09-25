@@ -629,11 +629,17 @@ const generateQuotePDF = async (req, res) => {
 // @access  Private
 const sendQuoteEmail = async (req, res) => {
   try {
-    const branch = req.body.branch; // Sucursal enviada desde el frontend
+    const branch = req.body.branch;
     if (!branch) {
       return res.status(400).json({ success: false, message: 'Sucursal (branch) es requerida' });
     }
-
+    // El PDF viene en req.file.buffer
+    let pdfBuffer;
+    if (req.file && req.file.buffer) {
+      pdfBuffer = req.file.buffer;
+    } else {
+      return res.status(400).json({ success: false, message: 'PDF de cotización es requerido' });
+    }
     const quote = await Quote.findByPk(req.params.id, {
       include: [
         {
@@ -644,28 +650,11 @@ const sendQuoteEmail = async (req, res) => {
         }
       ]
     });
-
     if (!quote) {
       return res.status(404).json({ success: false, message: 'Cotización no encontrada' });
     }
-
-    // Aquí deberías generar el PDF de la cotización
-    // Por ejemplo, si ya tienes el PDF generado y guardado:
-    // const pdfBuffer = fs.readFileSync(rutaDelPDF);
-    // Para este ejemplo, asumimos que tienes el PDF en req.body.pdfBuffer (Buffer base64)
-    let pdfBuffer;
-    if (req.body.pdfBuffer) {
-      pdfBuffer = Buffer.from(req.body.pdfBuffer, 'base64');
-    } else {
-      // Si no se envía el PDF, puedes devolver error o usar un placeholder
-      return res.status(400).json({ success: false, message: 'PDF de cotización es requerido' });
-    }
-
-    // Asunto y texto del correo
     const subject = `Cotización ${quote.folio} - ${branch}`;
     const text = `Estimado/a ${quote.clientInfoContact},\nAdjuntamos la cotización solicitada.\nFolio: ${quote.folio}`;
-
-    // Enviar correo desde la sucursal seleccionada
     await sendBranchQuoteEmail({
       branch,
       to: quote.clientInfoEmail,
@@ -673,9 +662,7 @@ const sendQuoteEmail = async (req, res) => {
       text,
       pdfBuffer
     });
-
     await quote.update({ status: 'sent', sentDate: new Date() });
-
     res.json({
       success: true,
       message: 'Cotización enviada por email exitosamente',

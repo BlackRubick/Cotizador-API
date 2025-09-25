@@ -2,6 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
+const multer = require('multer');
+const upload = multer();
 
 const {
   getQuotes,
@@ -67,6 +69,6 @@ router.post('/', quoteValidation, createQuote);
 router.put('/:id', quoteValidation, updateQuote);
 router.patch('/:id/status', statusUpdateValidation, updateQuoteStatus);
 router.delete('/:id', deleteQuote);
-router.post('/:id/send', sendQuoteEmail); // <--- Ruta para enviar cotización por email
+router.post('/:id/send', upload.single('pdfBuffer'), sendQuoteEmail); // <--- Ruta para enviar cotización por email
 
 module.exports = router;

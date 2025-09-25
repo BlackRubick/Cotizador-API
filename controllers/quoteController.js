@@ -257,7 +257,7 @@ const createQuote = async (req, res) => {
       termsWarranty: terms?.warranty || 'Garantía: 12 meses sobre defectos de fabricación.',
       termsObservations: terms?.observations || 'Sin más por el momento, nos ponemos a sus órdenes para cualquier duda y/o información adicional.',
       termsValidUntil: terms?.validUntil || null,
-      createdBy: req.user.id
+      createdBy: req.user ? req.user.id : null
     };
 
     console.log('💾 Quote data to save:', {

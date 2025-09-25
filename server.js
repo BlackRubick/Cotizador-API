@@ -22,6 +22,7 @@ const equipmentRoutes = require('./routes/equipment');
 const bulkRoutes = require('./routes/bulk');
 
 const app = express();
+app.set('trust proxy', 1); // <--- Agregado para proxies y rate-limit
 
 // ========== CORREGIDO: Configurar CORS ANTES de otras configuraciones ==========
 const corsOptions = {

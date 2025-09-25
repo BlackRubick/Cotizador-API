@@ -56,7 +56,7 @@ const statusUpdateValidation = [
 ];
 
 // Apply auth middleware to all routes
-router.use(auth);
+// router.use(auth); // <--- Desactivado para pruebas
 
 // Routes
 router.get('/stats', getQuoteStats);

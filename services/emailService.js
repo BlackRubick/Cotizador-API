@@ -7,44 +7,44 @@ class EmailService {
     this.initializeTransporter();
   }
 
-  // Initialize email transporter
+  // Inicializa el transportador de correo con la cuenta única
   initializeTransporter() {
     try {
-      this.transporter = nodemailer.createTransporter({
-        host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT || 587,
-        secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
+      this.transporter = nodemailer.createTransport({
+        host: 'smtp.office365.com',
+        port: 587,
+        secure: false,
         auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
+          user: 'cotizacionesacr@hotmail.com',
+          pass: 'Cuco2024**'
         },
         tls: {
           rejectUnauthorized: false
         }
       });
 
-      // Verify connection
+      // Verifica la conexión
       this.transporter.verify((error, success) => {
         if (error) {
-          console.log('❌ Email configuration error:', error);
+          console.log('❌ Error de configuración de correo:', error);
         } else {
-          console.log('✅ Email server is ready to send messages');
+          console.log('✅ El servidor de correo está listo para enviar mensajes');
         }
       });
     } catch (error) {
-      console.error('Email transporter initialization error:', error);
+      console.error('Error al inicializar el transportador de correo:', error);
     }
   }
 
-  // Send basic email
+  // Envía correo básico
   async sendEmail({ to, subject, text, html, attachments = [] }) {
     try {
       if (!this.transporter) {
-        throw new Error('Email transporter not initialized');
+        throw new Error('Transportador de correo no inicializado');
       }
 
       const mailOptions = {
-        from: `${process.env.COMPANY_NAME || 'Cotizador Médico'} <${process.env.SMTP_USER}>`,
+        from: `Cotizador Médico <cotizacionesacr@hotmail.com>`,
         to: Array.isArray(to) ? to.join(', ') : to,
         subject,
         text,
@@ -57,10 +57,10 @@ class EmailService {
       return {
         success: true,
         messageId: result.messageId,
-        message: 'Email sent successfully'
+        message: 'Correo enviado correctamente'
       };
     } catch (error) {
-      console.error('Send email error:', error);
+      console.error('Error al enviar correo:', error);
       return {
         success: false,
         error: error.message
@@ -68,7 +68,7 @@ class EmailService {
     }
   }
 
-  // Send welcome email to new users
+  // Envía correo de bienvenida a nuevos usuarios
   async sendWelcomeEmail(user) {
     const subject = `Bienvenido a ${process.env.COMPANY_NAME || 'Cotizador Médico'}`;
     
@@ -152,7 +152,7 @@ class EmailService {
     });
   }
 
-  // Send password reset email
+  // Envía correo de restablecimiento de contraseña
   async sendPasswordResetEmail(user, resetToken, resetUrl) {
     const subject = 'Restablecer contraseña - Cotizador Médico';
     
@@ -234,7 +234,7 @@ class EmailService {
     });
   }
 
-  // Send quote email to client
+  // Envía correo de cotización al cliente
   async sendQuoteEmail(quote, pdfAttachment = null) {
     const subject = `Cotización ${quote.folio} - ${process.env.COMPANY_NAME || 'Cotizador Médico'}`;
     
@@ -338,7 +338,7 @@ class EmailService {
     });
   }
 
-  // Send notification email to admin
+  // Envía correo de notificación al admin
   async sendAdminNotification(subject, message, data = {}) {
     const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
     
@@ -391,7 +391,7 @@ class EmailService {
     });
   }
 
-  // Test email configuration
+  // Prueba la configuración del correo
   async testEmailConfiguration() {
     try {
       if (!this.transporter) {
@@ -400,7 +400,7 @@ class EmailService {
 
       await this.transporter.verify();
       
-      // Send test email
+      // Envía correo de prueba
       const testResult = await this.sendEmail({
         to: process.env.SMTP_USER,
         subject: 'Test Email - Cotizador Médico',
@@ -418,52 +418,22 @@ class EmailService {
   }
 }
 
-const branchEmails = {
-  conduitlife: {
-    user: 'cotizaciones@conduitlife.mx',
-    pass: 'Cotiza.321'
-  },
-  biosystems: {
-    user: 'cotizaciones@biosystemshls.com',
-    pass: 'Cotiza.321'
-  },
-  escalabiomedica: {
-    user: 'cotizaciones@escalabiomedica.com',
-    pass: 'Cotiza.321'
-  },
-  clinicaydiseno: {
-    user: 'cotizaciones@clinicaydiseno.com',
-    pass: 'Cotiza.321'
-  }
-};
-
-function getBranchTransport(branch) {
-  const config = branchEmails[branch];
-  if (!config) throw new Error('Sucursal no configurada');
-  return nodemailer.createTransport({
+// Elimina la lógica de sucursales y usa solo la cuenta principal
+async function sendBranchQuoteEmail({ to, subject, text, pdfBuffer }) {
+  const transporter = nodemailer.createTransport({
     host: 'smtp.office365.com',
     port: 587,
     secure: false,
     auth: {
-      user: config.user,
-      pass: config.pass
+      user: 'cotizacionesacr@hotmail.com',
+      pass: 'Cuco2024**'
+    },
+    tls: {
+      rejectUnauthorized: false
     }
   });
-}
-
-/**
- * Envia un correo de cotización desde la sucursal indicada
- * @param {Object} options
- * @param {string} options.branch Sucursal (ej: 'conduitlife')
- * @param {string} options.to Email del cliente
- * @param {string} options.subject Asunto
- * @param {string} options.text Texto del correo
- * @param {string|Buffer} options.pdfBuffer PDF como Buffer o ruta
- */
-async function sendBranchQuoteEmail({ branch, to, subject, text, pdfBuffer }) {
-  const transporter = getBranchTransport(branch);
   const mailOptions = {
-    from: branchEmails[branch].user,
+    from: 'cotizacionesacr@hotmail.com',
     to,
     subject,
     text,

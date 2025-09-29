@@ -7,19 +7,14 @@ class EmailService {
     this.initializeTransporter();
   }
 
-  // Inicializa el transportador de correo con la cuenta única
+  // Inicializa el transportador de correo con Gmail
   initializeTransporter() {
     try {
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.office365.com',
-        port: 587,
-        secure: false,
+        service: 'gmail',
         auth: {
-          user: 'cotizacionesacr@hotmail.com',
+          user: 'cotizacionesacr4@gmail.com',
           pass: 'Cuco2024**'
-        },
-        tls: {
-          rejectUnauthorized: false
         }
       });
 
@@ -44,7 +39,7 @@ class EmailService {
       }
 
       const mailOptions = {
-        from: `Cotizador Médico <cotizacionesacr@hotmail.com>`,
+        from: `Cotizador Médico <cotizacionesacr4@gmail.com>`,
         to: Array.isArray(to) ? to.join(', ') : to,
         subject,
         text,
@@ -418,22 +413,17 @@ class EmailService {
   }
 }
 
-// Elimina la lógica de sucursales y usa solo la cuenta principal
+// Elimina la lógica de sucursales y usa solo la cuenta principal de Gmail
 async function sendBranchQuoteEmail({ to, subject, text, pdfBuffer }) {
   const transporter = nodemailer.createTransport({
-    host: 'smtp.office365.com',
-    port: 587,
-    secure: false,
+    service: 'gmail',
     auth: {
-      user: 'cotizacionesacr@hotmail.com',
+      user: 'cotizacionesacr4@gmail.com',
       pass: 'Cuco2024**'
-    },
-    tls: {
-      rejectUnauthorized: false
     }
   });
   const mailOptions = {
-    from: 'cotizacionesacr@hotmail.com',
+    from: 'cotizacionesacr4@gmail.com',
     to,
     subject,
     text,

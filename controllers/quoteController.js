@@ -642,14 +642,9 @@ const generateQuotePDF = async (req, res) => {
 // @access  Private
 const sendQuoteEmail = async (req, res) => {
   try {
-    const branch = req.body.branch;
-    if (!branch) {
-      return res.status(400).json({ success: false, message: 'Sucursal (branch) es requerida' });
-    }
     // Buscar por id o por folio
     let quote;
     if (/^\d+$/.test(req.params.id)) {
-      // Si es numérico, busca por id
       quote = await Quote.findByPk(req.params.id, {
         include: [
           {
@@ -661,7 +656,6 @@ const sendQuoteEmail = async (req, res) => {
         ]
       });
     } else {
-      // Si no es numérico, busca por folio
       quote = await Quote.findOne({
         where: { folio: req.params.id },
         include: [
@@ -677,17 +671,15 @@ const sendQuoteEmail = async (req, res) => {
     if (!quote) {
       return res.status(404).json({ success: false, message: 'Cotización no encontrada' });
     }
-    // El PDF viene en req.file.buffer
     let pdfBuffer;
     if (req.file && req.file.buffer) {
       pdfBuffer = req.file.buffer;
     } else {
       return res.status(400).json({ success: false, message: 'PDF de cotización es requerido' });
     }
-    const subject = `Cotización ${quote.folio} - ${branch}`;
+    const subject = `Cotización ${quote.folio} - Cotizador Médico`;
     const text = `Estimado/a ${quote.clientInfoContact},\nAdjuntamos la cotización solicitada.\nFolio: ${quote.folio}`;
     await sendBranchQuoteEmail({
-      branch,
       to: quote.clientInfoEmail,
       subject,
       text,
@@ -701,8 +693,7 @@ const sendQuoteEmail = async (req, res) => {
         quoteId: quote.id,
         folio: quote.folio,
         sentTo: quote.clientInfoEmail,
-        sentDate: quote.sentDate,
-        branch
+        sentDate: quote.sentDate
       }
     });
   } catch (error) {

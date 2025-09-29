@@ -7,14 +7,14 @@ class EmailService {
     this.initializeTransporter();
   }
 
-  // Inicializa el transportador de correo con Gmail
+  // Inicializa el transportador de correo con Gmail y contraseña de aplicación
   initializeTransporter() {
     try {
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
           user: 'cotizacionesacr4@gmail.com',
-          pass: 'Cuco2024**'
+          pass: 'tabn lxjw qubk qtmw'
         }
       });
 
@@ -419,7 +419,7 @@ async function sendBranchQuoteEmail({ to, subject, text, pdfBuffer }) {
     service: 'gmail',
     auth: {
       user: 'cotizacionesacr4@gmail.com',
-      pass: 'Cuco2024**'
+      pass: 'tabn lxjw qubk qtmw'
     }
   });
   const mailOptions = {

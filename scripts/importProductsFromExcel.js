@@ -42,17 +42,50 @@ const cleanValue = (value, fieldType = 'string') => {
 
   switch (fieldType) {
     case 'number':
-      const num = parseFloat(value);
-      return isNaN(num) ? null : num;
+      // Aceptar formatos con símbolos de moneda, comas de miles y espacios
+      try {
+        let v = value;
+        if (typeof v !== 'string') v = String(v);
+        // Eliminar caracteres no numéricos excepto punto y signo negativo
+        const cleaned = v.replace(/[^0-9.\-]+/g, '');
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? null : num;
+      } catch (e) {
+        return null;
+      }
     case 'integer':
-      const int = parseInt(value);
-      return isNaN(int) ? null : int;
+      try {
+        let v = value;
+        if (typeof v !== 'string') v = String(v);
+        const cleaned = v.replace(/[^0-9\-]+/g, '');
+        const int = parseInt(cleaned);
+        return isNaN(int) ? null : int;
+      } catch (e) {
+        return null;
+      }
     case 'string':
       return String(value).trim();
     case 'currency':
-      // Convertir MX a MXN
-      if (value === 'MX') return 'MXN';
-      return String(value).trim();
+      // Normalizar códigos de moneda y variantes comunes
+      try {
+        let v = String(value).trim();
+        if (!v) return null;
+        const up = v.toUpperCase();
+        const currencyMap = {
+          'MX': 'MXN',
+          'MXN': 'MXN',
+          'US': 'USD',
+          'USD': 'USD',
+          'EU': 'EUR',
+          'EUR': 'EUR',
+          '$': 'USD'
+        };
+        if (currencyMap[up]) return currencyMap[up];
+        // Devolver primer token (por si viene como 'MXN ' o ' USD')
+        return up.split('\\s+')[0];
+      } catch (e) {
+        return null;
+      }
     default:
       return value;
   }
@@ -219,6 +252,25 @@ const importProductsFromExcel = async (excelFilePath) => {
         // Preferir PRECIO VENTA (mapeado a precio_venta_paquete)
         assignIfExists('precio_venta_paquete', 'number');
         assignIfExists('precio_unitario', 'number');
+
+        // Si no hay PRECIO VENTA directo, intentar calcularlo desde factory_price y factores
+        const hasPrecioVenta = Object.prototype.hasOwnProperty.call(productData, 'precio_venta_paquete') && productData.precio_venta_paquete !== null && productData.precio_venta_paquete !== undefined;
+        if (!hasPrecioVenta) {
+          const fp = productData.factory_price || null;
+          const lf = productData.landed_factor || productData.landen_factor || 1.0;
+          const mf = productData.margin_factor || 1.0;
+          const vm = productData.valor_moneda || 1.0;
+          const com = productData.comision_venta || 0.0;
+
+          if (fp !== null && fp !== undefined) {
+            // precio = factory_price * landed_factor * margin_factor * valor_moneda * (1 + comisionVenta/100)
+            const computed = Number(fp) * Number(lf || 1) * Number(mf || 1) * Number(vm || 1) * (1 + (Number(com) / 100 || 0));
+            if (!isNaN(computed)) {
+              productData.precio_venta_paquete = parseFloat(computed.toFixed(2));
+              console.log(`ℹ️ Calculated precio_venta_paquete from factory_price for ${productData.code}: ${productData.precio_venta_paquete}`);
+            }
+          }
+        }
 
         // Asignar categoría
         productData.categoryId = await getCategoryId(

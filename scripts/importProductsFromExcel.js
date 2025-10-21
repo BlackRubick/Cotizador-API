@@ -24,11 +24,13 @@ const FIELD_MAPPING = {
   'ALMACEN EN:': 'almacen_en',
   'INCLUYE IIMPUESTOS': 'incluye',
   'FACTORY PRICE': 'factory_price',
+  'PRICE EXW': 'factory_price',
   'LANDED FACTOR ': 'landed_factor',
   'MARGIN FACTOR': 'margin_factor',
   'VALOR MONEDA': 'valor_moneda',
   'COMISION VENTA': 'comision_venta',
   'PRECIO VENTA PAQUETE': 'precio_venta_paquete',
+  'PRECIO VENTA': 'precio_venta_paquete',
   'PRECIO UNITARIO': 'precio_unitario'
 };
 
@@ -141,12 +143,23 @@ const importProductsFromExcel = async (excelFilePath) => {
     console.log(`📊 Filas de datos: ${dataRows.length}`);
 
     // Mapear índices de columnas
-    const columnIndexes = {};
-    headers.forEach((header, index) => {
-      if (FIELD_MAPPING[header]) {
-        columnIndexes[FIELD_MAPPING[header]] = index;
-      }
-    });
+      // Mapear índices de columnas (normalizando headers para evitar espacios o diferencias de mayúsculas)
+      const columnIndexes = {};
+      // Normalizar el mapping: claves en mayúsculas y sin espacios al inicio/fin
+      const normalizedMapping = {};
+      Object.entries(FIELD_MAPPING).forEach(([k, v]) => {
+        if (typeof k === 'string') {
+          normalizedMapping[k.trim().toUpperCase()] = v;
+        }
+      });
+
+      headers.forEach((header, index) => {
+        const raw = header === undefined || header === null ? '' : String(header);
+        const key = raw.trim().toUpperCase();
+        if (normalizedMapping[key]) {
+          columnIndexes[normalizedMapping[key]] = index;
+        }
+      });
 
     console.log('🗂️  Mapeo de columnas:');
     Object.entries(columnIndexes).forEach(([field, index]) => {
@@ -170,34 +183,42 @@ const importProductsFromExcel = async (excelFilePath) => {
         }
 
         // Extraer datos de la fila
-        const productData = {
-          // Campos requeridos
-          code: generateProductCode(row[columnIndexes['item']], i + 1),
-          createdBy: adminUser.id,
-          
-          // Campos del negocio
-          servicio: cleanValue(row[columnIndexes['servicio']], 'string'),
-          especialidad: cleanValue(row[columnIndexes['especialidad']], 'string'),
-          clasificacion: cleanValue(row[columnIndexes['clasificacion']], 'string'),
-          para_descripcion: cleanValue(row[columnIndexes['para_descripcion']], 'string'),
-          item: cleanValue(row[columnIndexes['item']], 'string'),
-          cantidad_paquete: cleanValue(row[columnIndexes['cantidad_paquete']], 'integer') || 1,
-          moneda: cleanValue(row[columnIndexes['moneda']], 'currency') || 'MXN',
-          costo: cleanValue(row[columnIndexes['costo']], 'number'),
-          costo_unitario: cleanValue(row[columnIndexes['costo_unitario']], 'number'),
-          almacen: cleanValue(row[columnIndexes['almacen']], 'string'),
-          proveedor: cleanValue(row[columnIndexes['proveedor']], 'string'),
-          uso: cleanValue(row[columnIndexes['uso']], 'string'),
-          almacen_en: cleanValue(row[columnIndexes['almacen_en']], 'string'),
-          incluye: cleanValue(row[columnIndexes['incluye']], 'string'),
-          factory_price: cleanValue(row[columnIndexes['factory_price']], 'number'),
-          landed_factor: cleanValue(row[columnIndexes['landed_factor']], 'number') || 1.0,
-          margin_factor: cleanValue(row[columnIndexes['margin_factor']], 'number') || 1.0,
-          valor_moneda: cleanValue(row[columnIndexes['valor_moneda']], 'number') || 1.0,
-          comision_venta: cleanValue(row[columnIndexes['comision_venta']], 'number') || 0.0,
-          precio_venta_paquete: cleanValue(row[columnIndexes['precio_venta_paquete']], 'number'),
-          precio_unitario: cleanValue(row[columnIndexes['precio_unitario']], 'number')
+        // Construir productData sólo con los campos que realmente existen en el archivo
+        const productData = {};
+        // Campos requeridos
+        productData.code = generateProductCode(row[columnIndexes['item']], i + 1);
+        productData.createdBy = adminUser.id;
+
+        // Helper para asignar solo si la columna existe
+        const assignIfExists = (key, type = 'string', defaultValue) => {
+          if (columnIndexes[key] !== undefined) {
+            const val = cleanValue(row[columnIndexes[key]], type);
+            productData[key] = (val === null || val === undefined) ? defaultValue : val;
+          }
         };
+
+        assignIfExists('servicio', 'string');
+        assignIfExists('especialidad', 'string');
+        assignIfExists('clasificacion', 'string');
+        assignIfExists('para_descripcion', 'string');
+        assignIfExists('item', 'string');
+        assignIfExists('cantidad_paquete', 'integer', 1);
+        assignIfExists('moneda', 'currency', 'MXN');
+        assignIfExists('costo', 'number');
+        assignIfExists('costo_unitario', 'number');
+        assignIfExists('almacen', 'string');
+        assignIfExists('proveedor', 'string');
+        assignIfExists('uso', 'string');
+        assignIfExists('almacen_en', 'string');
+        assignIfExists('incluye', 'string');
+        assignIfExists('factory_price', 'number');
+        assignIfExists('landed_factor', 'number', 1.0);
+        assignIfExists('margin_factor', 'number', 1.0);
+        assignIfExists('valor_moneda', 'number', 1.0);
+        assignIfExists('comision_venta', 'number', 0.0);
+        // Preferir PRECIO VENTA (mapeado a precio_venta_paquete)
+        assignIfExists('precio_venta_paquete', 'number');
+        assignIfExists('precio_unitario', 'number');
 
         // Asignar categoría
         productData.categoryId = await getCategoryId(

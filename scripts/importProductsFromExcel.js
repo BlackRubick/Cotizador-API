@@ -89,16 +89,50 @@ const importProductsFromExcel = async (excelFilePath, options = { dryRun: false 
 
     const columnIndexes = {}; const normalizedMapping = {};
     Object.entries(FIELD_MAPPING).forEach(([k,v]) => { if (typeof k === 'string') normalizedMapping[k.trim().toUpperCase()] = v; });
-    headers.forEach((h, idx) => { const key = (h||'').toString().trim().toUpperCase(); if (normalizedMapping[key]) columnIndexes[normalizedMapping[key]] = idx; });
+    // Match headers robustly: exact match first, then substring/simplified fallback
+    headers.forEach((h, idx) => {
+      const raw = h === undefined || h === null ? '' : String(h);
+      const key = raw.trim().toUpperCase();
+      if (normalizedMapping[key]) {
+        columnIndexes[normalizedMapping[key]] = idx;
+        return;
+      }
+
+      // Try substring match (handles 'PRECIO VENTA $', 'PRECIO VENTA (MXN)', etc.)
+      let matched = false;
+      for (const mapKey of Object.keys(normalizedMapping)) {
+        if (!mapKey) continue;
+        if (key.includes(mapKey) || mapKey.includes(key)) {
+          columnIndexes[normalizedMapping[mapKey]] = idx;
+          matched = true;
+          break;
+        }
+      }
+
+      if (matched) return;
+
+      // Simplified comparison: strip non-alphanumeric and try again
+      const simplified = key.replace(/[^A-Z0-9 ]+/g, '').trim();
+      for (const mapKey of Object.keys(normalizedMapping)) {
+        const sm = mapKey.replace(/[^A-Z0-9 ]+/g, '').trim();
+        if (!sm) continue;
+        if (simplified.includes(sm) || sm.includes(simplified)) {
+          columnIndexes[normalizedMapping[mapKey]] = idx;
+          break;
+        }
+      }
+    });
 
     const dryRunResults = []; let successCount = 0, errorCount = 0; const errors = [];
     for (let i=0;i<dataRows.length;i++) {
       try {
         const row = dataRows[i]; if (!row || row.every(c => !c)) continue;
         const productData = {};
-        productData.code = generateProductCode(row[columnIndexes['item']], i+1);
+  // Support multiple possible code/item headers
+  const codeColumnIndex = columnIndexes['item'] ?? columnIndexes['code'] ?? columnIndexes['codigo'] ?? columnIndexes['cod'] ?? columnIndexes['item_code'];
+  productData.code = generateProductCode(row[codeColumnIndex], i+1);
         productData.createdBy = adminUser.id;
-        const assignIfExists = (key,type='string',def)=>{ if (columnIndexes[key] !== undefined) { const v = cleanValue(row[columnIndexes[key]], type); productData[key] = (v===null||v===undefined)?def:v; } };
+  const assignIfExists = (key,type='string',def)=>{ if (columnIndexes[key] !== undefined) { const v = cleanValue(row[columnIndexes[key]], type); productData[key] = (v===null||v===undefined)?def:v; } };
         assignIfExists('servicio','string'); assignIfExists('especialidad','string'); assignIfExists('clasificacion','string'); assignIfExists('para_descripcion','string'); assignIfExists('item','string');
         assignIfExists('cantidad_paquete','integer',1); assignIfExists('moneda','currency','MXN'); assignIfExists('costo','number'); assignIfExists('costo_unitario','number'); assignIfExists('almacen','string'); assignIfExists('proveedor','string');
         assignIfExists('uso','string'); assignIfExists('almacen_en','string'); assignIfExists('incluye','string'); assignIfExists('factory_price','number'); assignIfExists('landed_factor','number',1.0); assignIfExists('margin_factor','number',1.0);

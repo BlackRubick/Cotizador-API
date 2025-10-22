@@ -127,8 +127,9 @@ if (require.main === module) {
   const dry = process.argv.includes('--dry-run') || process.argv.includes('-n');
   const confirm = process.argv.includes('--confirm');
   const backup = !process.argv.includes('--no-backup');
-  console.log('Archivo:', excelPath, 'dryRun:', dry, 'confirm:', confirm, 'backup:', backup);
-  repair(excelPath, { dryRun: dry, confirm, backup }).then(r => { console.log('Done', r); process.exit(0); }).catch(e => { console.error(e); process.exit(1); });
+  const useGeneratedCodes = process.argv.includes('--use-generated-codes');
+  console.log('Archivo:', excelPath, 'dryRun:', dry, 'confirm:', confirm, 'backup:', backup, 'useGeneratedCodes:', useGeneratedCodes);
+  repair(excelPath, { dryRun: dry, confirm, backup, useGeneratedCodes }).then(r => { console.log('Done', r); process.exit(0); }).catch(e => { console.error(e); process.exit(1); });
 }
 
 module.exports = { repair };

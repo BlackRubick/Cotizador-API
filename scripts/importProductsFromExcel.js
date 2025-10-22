@@ -132,7 +132,17 @@ const importProductsFromExcel = async (excelFilePath, options = { dryRun: false 
   const codeColumnIndex = columnIndexes['item'] ?? columnIndexes['code'] ?? columnIndexes['codigo'] ?? columnIndexes['cod'] ?? columnIndexes['item_code'];
   productData.code = generateProductCode(row[codeColumnIndex], i+1);
         productData.createdBy = adminUser.id;
-  const assignIfExists = (key,type='string',def)=>{ if (columnIndexes[key] !== undefined) { const v = cleanValue(row[columnIndexes[key]], type); productData[key] = (v===null||v===undefined)?def:v; } };
+  const assignIfExists = (key,type='string',def)=>{
+    if (columnIndexes[key] !== undefined) {
+      const v = cleanValue(row[columnIndexes[key]], type);
+      // Treat explicit zeros for precio_venta_paquete as "missing" so fallback calculation applies
+      if (key === 'precio_venta_paquete' && typeof v === 'number' && v === 0) {
+        // don't assign, let fallback compute from factory_price
+        return;
+      }
+      productData[key] = (v===null||v===undefined)?def:v;
+    }
+  };
         assignIfExists('servicio','string'); assignIfExists('especialidad','string'); assignIfExists('clasificacion','string'); assignIfExists('para_descripcion','string'); assignIfExists('item','string');
         assignIfExists('cantidad_paquete','integer',1); assignIfExists('moneda','currency','MXN'); assignIfExists('costo','number'); assignIfExists('costo_unitario','number'); assignIfExists('almacen','string'); assignIfExists('proveedor','string');
         assignIfExists('uso','string'); assignIfExists('almacen_en','string'); assignIfExists('incluye','string'); assignIfExists('factory_price','number'); assignIfExists('landed_factor','number',1.0); assignIfExists('margin_factor','number',1.0);

@@ -135,11 +135,6 @@ const importProductsFromExcel = async (excelFilePath, options = { dryRun: false 
   const assignIfExists = (key,type='string',def)=>{
     if (columnIndexes[key] !== undefined) {
       const v = cleanValue(row[columnIndexes[key]], type);
-      // Treat explicit zeros for precio_venta_paquete as "missing" so fallback calculation applies
-      if (key === 'precio_venta_paquete' && typeof v === 'number' && v === 0) {
-        // don't assign, let fallback compute from factory_price
-        return;
-      }
       productData[key] = (v===null||v===undefined)?def:v;
     }
   };

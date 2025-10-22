@@ -170,7 +170,7 @@ const importProductsFromExcel = async (excelFilePath, options = { dryRun: false 
 };
 
 if (require.main === module) {
-  const excelPath = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : path.join(__dirname, '..', 'Precios.xlsx');
+  const excelPath = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : path.join(__dirname, '..', 'precios.xlsx');
   const dryRun = process.argv.includes('--dry-run') || process.argv.includes('-n');
   console.log(`Archivo: ${excelPath}  dryRun: ${dryRun}`);
   importProductsFromExcel(excelPath,{ dryRun }).then(r=>{ console.log('Done', r); process.exit(0); }).catch(e=>{ console.error(e); process.exit(1); }).finally(()=>{ if (!dryRun) sequelize.close(); });

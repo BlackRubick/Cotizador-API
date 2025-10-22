@@ -57,14 +57,22 @@ const repair = async (excelPath, options = { dryRun: true, confirm: false, backu
   const headers = rows[0];
   const dataRows = rows.slice(1);
   const idx = findColumnIndexes(headers);
-  if (idx.code === undefined) throw new Error('No se pudo detectar la columna de código/ITEM en el Excel');
+  if (idx.code === undefined && !options.useGeneratedCodes) throw new Error('No se pudo detectar la columna de código/ITEM en el Excel. Si quieres usar códigos generados (PROD-0001...), ejecuta con --use-generated-codes');
   if (idx.precio === undefined) throw new Error('No se pudo detectar la columna PRECIO VENTA en el Excel');
+
+  const generateProductCode = (item, index) => { if (item && typeof item === 'string' && item.trim()) return item.trim().toUpperCase(); return `PROD-${String(index).padStart(4,'0')}`; };
 
   const changes = [];
   for (let i = 0; i < dataRows.length; i++) {
     const row = dataRows[i];
-    const codeRaw = row[idx.code];
-    const code = codeRaw ? String(codeRaw).trim().toUpperCase() : null;
+    let code = null;
+    if (idx.code !== undefined) {
+      const codeRaw = row[idx.code];
+      code = codeRaw ? String(codeRaw).trim().toUpperCase() : null;
+    } else if (options.useGeneratedCodes) {
+      // i is zero-based for dataRows; earlier import used (i+1) to generate PROD-0001 for first data row
+      code = generateProductCode(null, i+1);
+    }
     const rawPrecio = row[idx.precio];
     const precio = cleanNumber(rawPrecio);
     if (!code) continue;
